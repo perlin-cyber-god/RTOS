@@ -43,6 +43,13 @@ Priority inversion is a problematic scenario in real-time systems where a high-p
 4. **H** is now waiting for **L**, but **L** cannot run because **M** is hogging the CPU.
    - Result: **M** is running while **H** waits, even though **H** has higher priority.
 
+#### Concrete Example: I2C Bus Writing
+Imagine a system where multiple tasks share an **I2C bus**, which can only handle one electrical signal/transaction at a time.
+1. **Task Low** starts writing a large data packet to the I2C bus and locks the I2C mutex.
+2. **Task High** (e.g., a critical sensor task) wakes up and needs to read from the I2C bus. It finds the bus locked and enters a **Blocked** state, waiting for Task Low to finish.
+3. **Task Medium** (e.g., a UI refresh task) becomes ready. Since it has a higher priority than Task Low, the RTOS preempts Task Low so Task Medium can use the CPU.
+4. **The Inversion:** Task Medium is now using the CPU for UI updates, preventing Task Low from finishing its I2C write. Consequently, Task High remains blocked. Task Medium has effectively bypassed the priority hierarchy, gaining CPU time over Task High, which is stuck waiting for a resource held by a preempted task.
+
 ### Solutions:
 - **Priority Inheritance Protocol (PIP):** When **H** blocks on a resource held by **L**, **L**'s priority is temporarily boosted to match **H**. This prevents **M** from preempting **L**, allowing **L** to finish and release the resource quickly.
 - **Priority Ceiling Protocol (PCP):** Each resource is assigned a priority ceiling (the highest priority of any task that may lock it).
