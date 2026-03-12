@@ -79,6 +79,31 @@ To use the idle hook in FreeRTOS:
 
 ---
 
+## The Tick Hook Function
+
+The **Tick Hook** is an optional callback function called by the RTOS kernel during each **Tick Interrupt**. It is often used to implement software timers or periodic checks that must happen with high frequency and precision.
+
+### Key Characteristics:
+- **High Frequency:** It executes as part of the RTOS tick interrupt (e.g., every 1ms if the tick rate is 1000Hz).
+- **ISR Context:** Unlike the Idle Hook, the Tick Hook executes from within an **Interrupt Service Routine (ISR)**.
+
+### Implementing the Tick Hook (FreeRTOS Example)
+1.  **Enable the Feature:** Set `configUSE_TICK_HOOK` to `1` in your `FreeRTOSConfig.h`.
+2.  **Define the Callback:** Implement the following function in your application:
+    ```c
+    void vApplicationTickHook( void ) {
+        /* High-precision periodic code here */
+    }
+    ```
+
+### Critical Rules for the Tick Hook:
+- **Keep it Short:** Since it runs inside an ISR, it must execute extremely quickly to avoid delaying other interrupts or the scheduler itself.
+- **Minimal Stack Usage:** It uses the system's interrupt stack, which is often very limited.
+- **API Restrictions:** It **must not** call any RTOS API functions that do not end in `FromISR` (e.g., use `xQueueSendToBackFromISR` instead of `xQueueSend`).
+- **No Blocking:** It cannot call any function that might cause the task to block or yield.
+
+---
+
 ## Priority Inversion
 
 Priority inversion is a problematic scenario in real-time systems where a high-priority task is indirectly preempted by a lower-priority task, effectively "inverting" their assigned priorities.
