@@ -49,6 +49,20 @@ In an RTOS, a task is always in one of the following four states:
 - **Any State → Suspended:** A task is explicitly suspended via a system call.
 - **Suspended → Ready:** A task is explicitly resumed and is now eligible to be scheduled again.
 
+## The Idle Task
+
+The Idle Task is a special task created automatically by the RTOS kernel when the scheduler is started. It ensures that there is always at least one task capable of running on the CPU.
+
+### Key Characteristics:
+- **Automatic Creation:** It is initialized by the kernel during the scheduling startup phase.
+- **Lowest Priority:** It is assigned the lowest possible priority (typically 0) to ensure it never consumes CPU time if any application task is in the **Ready** state.
+- **Always Available:** When no other task is in the **Running** or **Ready** state, the Idle Task becomes the **Running** task.
+
+### Responsibilities:
+1. **Memory Management:** The Idle Task is responsible for freeing memory allocated by the RTOS to tasks that have been deleted. This ensures resources are reclaimed properly.
+2. **Low Power Management (Idle Hook):** RTOS allows the use of an **Application Idle Hook**—a callback function within the Idle Task. This is often used to put the CPU into a low-power or sleep mode when no useful application tasks are executing, significantly reducing power consumption.
+3. **Background Processing:** It can be used to perform background activities like system telemetry or watchdog "kicking" without interfering with time-critical tasks.
+
 ---
 
 ## Priority Inversion
