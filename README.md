@@ -63,6 +63,19 @@ The Idle Task is a special task created automatically by the RTOS kernel when th
 2. **Low Power Management (Idle Hook):** RTOS allows the use of an **Application Idle Hook**—a callback function within the Idle Task. This is often used to put the CPU into a low-power or sleep mode when no useful application tasks are executing, significantly reducing power consumption.
 3. **Background Processing:** It can be used to perform background activities like system telemetry or watchdog "kicking" without interfering with time-critical tasks.
 
+### Implementing the Idle Hook (FreeRTOS Example)
+To use the idle hook in FreeRTOS:
+1.  **Enable the Feature:** Set `configUSE_IDLE_HOOK` to `1` in your `FreeRTOSConfig.h`.
+2.  **Define the Callback:** Implement the following function in your application code:
+    ```c
+    void vApplicationIdleHook( void ) {
+        /* Application specific code here */
+        // Example: Put MCU in sleep mode
+        __WFI(); // Wait For Interrupt
+    }
+    ```
+3.  **Critical Rule:** The idle hook function **must not** call any API functions that could cause the idle task to **Block** (e.g., `vTaskDelay()` or waiting for a semaphore). The idle task must always be ready to run.
+
 ---
 
 ## Priority Inversion
