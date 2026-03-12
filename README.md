@@ -59,7 +59,8 @@ The Idle Task is a special task created automatically by the RTOS kernel when th
 - **Always Available:** When no other task is in the **Running** or **Ready** state, the Idle Task becomes the **Running** task.
 
 ### Responsibilities:
-1. **Memory Management:** The Idle Task is responsible for freeing memory allocated by the RTOS to tasks that have been deleted. This ensures resources are reclaimed properly.
+1. **Memory Management (The "Housekeeper"):** When a task deletes itself (e.g., `vTaskDelete(NULL)`), it cannot free its own memory because it is still using its stack to execute the deletion code. The RTOS marks the task as deleted, and the **Idle Task** is responsible for actually freeing the memory (Stack and TCB) allocated to that deleted task. 
+   - *Note:* If Task A deletes Task B, the memory can often be freed immediately; the Idle Task is specifically required for *self-deleting* tasks.
 2. **Low Power Management (Idle Hook):** RTOS allows the use of an **Application Idle Hook**—a callback function within the Idle Task. This is often used to put the CPU into a low-power or sleep mode when no useful application tasks are executing, significantly reducing power consumption.
 3. **Background Processing:** It can be used to perform background activities like system telemetry or watchdog "kicking" without interfering with time-critical tasks.
 
