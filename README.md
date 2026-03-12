@@ -26,9 +26,11 @@ This repository explores the fundamentals and implementation of Real-Time Operat
 | **Interrupts** | Can be masked for long periods | Low and predictable latency |
 
 ### How RTOS Achieves Determinism
-1. **Preemptive Kernel:** The RTOS kernel can be interrupted at almost any point. If a higher-priority task becomes ready, the current task is immediately suspended.
-2. **Fixed-Priority Scheduling:** Tasks are assigned a priority, and the scheduler always runs the highest-priority "Ready" task.
-3. **Efficient Data Structures:** Uses bitmasks and priority-grouped ready lists to identify the highest priority task in a single CPU instruction or a few cycles, regardless of the total task count.
+1. **Priority-Based Preemptive Scheduling:** The scheduler ensures the highest-priority "Ready" task always owns the CPU.
+2. **Minimized Critical Sections:** RTOS kernels are designed with no or very short critical sections where preemption is disabled. This ensures that a high-priority task is never "locked out" of the CPU by a lower-priority task running in kernel space for too long.
+3. **Bounded Interrupt Latency:** The maximum time between an interrupt trigger and the start of the Interrupt Service Routine (ISR) is strictly defined and guaranteed.
+4. **Bounded Scheduling Latency:** The time taken to switch context from one task to another (after an event or interrupt) is constant ($O(1)$) and has a guaranteed upper bound.
+5. **Priority Inversion Avoidance:** Built-in mechanisms like Priority Inheritance or Priority Ceiling protocols prevent lower-priority tasks from indirectly blocking higher-priority ones.
 
 ---
 
