@@ -32,6 +32,23 @@ This repository explores the fundamentals and implementation of Real-Time Operat
 4. **Bounded Scheduling Latency:** The time taken to switch context from one task to another (after an event or interrupt) is constant ($O(1)$) and has a guaranteed upper bound.
 5. **Priority Inversion Avoidance:** Built-in mechanisms like Priority Inheritance or Priority Ceiling protocols prevent lower-priority tasks from indirectly blocking higher-priority ones.
 
+## Task States in an RTOS
+
+In an RTOS, a task is always in one of the following four states:
+
+1.  **Running:** The task is currently being executed by the CPU. In a single-core system, only one task can be in the Running state at any given time.
+2.  **Ready:** The task is prepared to run and is waiting for the scheduler to allocate CPU time. It has all the resources it needs but is not the highest-priority "Ready" task at the moment.
+3.  **Blocked:** The task is waiting for a specific event to occur before it can continue. This could be waiting for a mutex to be released, a semaphore to be signaled, a message to arrive in a queue, or a specific time delay to expire. A blocked task does not consume any CPU time.
+4.  **Suspended:** The task has been explicitly moved out of the scheduling loop, often by another task or the kernel itself (e.g., using a `vTaskSuspend()` call). It will not run until it is explicitly "Resumed."
+
+### State Transitions
+- **Ready → Running:** The scheduler selects the task because it is the highest-priority task in the Ready list.
+- **Running → Ready:** A higher-priority task becomes Ready (preemption), or the task's time slice expires (if round-robin is used for equal priorities).
+- **Running → Blocked:** The task requests a resource that isn't available or waits for an event/delay.
+- **Blocked → Ready:** The event the task was waiting for occurs (e.g., a mutex is released).
+- **Any State → Suspended:** A task is explicitly suspended via a system call.
+- **Suspended → Ready:** A task is explicitly resumed and is now eligible to be scheduled again.
+
 ---
 
 ## Priority Inversion
