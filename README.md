@@ -2,6 +2,45 @@
 
 This repository explores the fundamentals and implementation of Real-Time Operating Systems.
 
+## Hardware Platforms: Choosing Your RTOS Target
+
+Before diving into the code, it's important to understand the hardware platforms commonly used in the industry and how they differ in their real-time capabilities.
+
+### 1. STM32 (The Surgeon)
+The STM32 is built for **hard real-time precision**. In the industry, this is what you use for motor control, medical devices, or flight controllers (like the ones used in drone projects).
+
+- **Real-time Determinism:** When you tell an STM32 to run a task every 1ms, it does it with microsecond accuracy.
+- **Peripherals:** It has "beast" hardware timers and ADCs. If you need to read a sensor at exactly 10,000 times per second, STM32 is the king.
+- **The RTOS Experience:** This is the best board for learning FreeRTOS because it doesn't have a "hidden" operating system running in the background. It's just your code and the hardware.
+- **Why it's better than ESP32 here:** ESP32 is great, but its internal Wi-Fi/Bluetooth stack often "interrupts" the CPU, which can mess with extreme precision timing.
+
+### 2. ESP32 (The Socialite)
+The ESP32 is the **IoT Workhorse**. If your project needs to talk to the internet, you use an ESP32.
+
+- **Integrated Wireless:** It has Wi-Fi and Bluetooth baked into the silicon. To do that on an STM32, you'd need extra modules and messy wiring.
+- **Dual Core:** Most ESP32s have two cores. You can run your "FreeRTOS task" on Core 1 and let the "Wi-Fi stuff" hang out on Core 0 so they don't fight.
+- **The "Hidden" RTOS:** Interestingly, the ESP32 already runs FreeRTOS by default. Even a simple "Arduino" sketch on an ESP32 is actually a task running inside FreeRTOS.
+
+### 3. Raspberry Pi 5 (The General)
+The RPi 5 isn't a microcontroller; it's a **Full Computer (SBC)**. It runs Linux.
+
+- **Processing Power:** The RPi 5 is roughly 100x to 500x more powerful than your STM32. It can handle 4K video, AI object detection, and web servers.
+- **The "Non-Real-Time" Problem:** Because it runs Linux, it is **not deterministic**. If you ask Linux to toggle a pin in 1ms, it might take 1.2ms or 2.0ms because it was busy updating the clock or checking for an email in the background.
+- **The "Combo" Move:** In professional robotics, engineers often use both:
+  - **RPi 5:** Does the "heavy lifting" (Camera vision, Path planning, GUI).
+  - **STM32:** Connected to the RPi via UART/SPI to handle the "real-time" stuff (Motor PWM, Sensor timing).
+
+### Comparison at a Glance
+
+| Feature | STM32 (Nucleo) | ESP32 | Raspberry Pi 5 |
+| :--- | :--- | :--- | :--- |
+| **Primary Use** | Industrial/Real-Time | IoT/Wireless | High-level Apps/AI |
+| **OS** | None / RTOS | FreeRTOS (Native) | Full Linux |
+| **Power Draw** | Very Low (< 50mA) | Medium (~100-200mA) | High (> 2A) |
+| **Timing** | Microsecond Precision | Millisecond Precision | Varies (Not precise) |
+
+---
+
 ## GPOS vs. RTOS: Key Differences
 
 ### General Purpose Operating System (GPOS)
