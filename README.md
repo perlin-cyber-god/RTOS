@@ -369,11 +369,47 @@ When working with STM32, you will encounter two main debug probes. Understanding
 ### Summary: Which one should you use?
 
 1.  **Use ST-Link if:** You are a beginner, working exclusively with STM32, and just need to upload code and do basic step-through debugging.
-2.  **Use J-Link if:**
+2. **Use J-Link if:**
     - You need to debug complex timing issues (using SystemView).
     - You are working with non-ST microcontrollers (like Nordic or NXP).
     - You are tired of hitting the "6 breakpoint limit" in large projects.
     - You want the fastest possible upload speeds during a rapid "code-flash-test" cycle.
+
+---
+
+## How it Works: SEGGER RTT & SystemView
+
+This is the "Grand Finale" that explains how **SEGGER SystemView** actually works in real-time without crashing your RTOS timing. While Semihosting stops the CPU and UART is slow, this method uses **RTT (Real-Time Transfer)**—a high-speed data highway between your STM32 and your PC.
+
+### The Data Flow: From Target to Host
+
+#### 1. The Target System (Your STM32)
+*   **Application & RTOS:** Your code runs normally.
+*   **SystemView API:** Instead of a slow `printf`, you use this lightweight API. It simply records events like "Task A started" or "Interrupt X occurred."
+*   **RTT Buffer (Software FIFO):** This is the **"secret sauce."** The data is written into a small "First-In-First-Out" circle of memory inside your **Target RAM**. The CPU doesn't wait for the data to be sent; it just drops it in the buffer and moves on (taking only a few microseconds).
+
+#### 2. The J-Link (The Bridge)
+*   The **J-Link** debugger (or your "Reflashed" Nucleo) reaches into the STM32's RAM while the CPU is still running. It "steals" the data from the RTT Buffer and sends it to the PC.
+
+#### 3. The Host System (Your PC)
+*   **J-Link DLL:** The driver that manages the data stream.
+*   **SystemViewer:** The application that takes those raw timestamps and events and turns them into a beautiful, moving visual graph.
+
+### Why This Matters for Your Project
+This architecture provides high **Observability** with:
+*   **Minimal Overhead:** Because of the "RTT Buffer" in RAM, the impact on your FreeRTOS task timing is almost zero.
+*   **No Extra Pins:** Unlike UART (which needs PA2/PA3), this uses the standard debug pins already connected to your mini-USB.
+
+### Summary: The "Big Three" Logging Methods
+
+| Method | Speed | CPU Impact | Best For... |
+| :--- | :--- | :--- | :--- |
+| **Semihosting** | Very Slow | **High** (Stops CPU) | Simple setup, no extra hardware. |
+| **UART** | Medium | Low | Basic text logging. |
+| **SEGGER RTT** | **Very High** | **Very Low** | Professional RTOS debugging / SystemView. |
+
+---
+
 
 ---
 
