@@ -138,22 +138,36 @@ When you switch from Task A to Task B, you have to save the "State" (CPU registe
 
 ---
 
-## Task States in an RTOS
+## Task States: The Scheduler as a "State Machine Manager"
 
-In an RTOS, a task is always in one of the following four states:
+In an RTOS, the Scheduler doesn't just decide who runs; it actively manages the **lifecycle** of every task. It maintains internal "Ready," "Blocked," and "Suspended" lists (sets of TCBs) and moves tasks between them based on system events.
 
-1.  **Running:** The task is currently being executed by the CPU. In a single-core system, only one task can be in the Running state at any given time.
-2.  **Ready:** The task is prepared to run and is waiting for the scheduler to allocate CPU time. It has all the resources it needs but is not the highest-priority "Ready" task at the moment.
-3.  **Blocked:** The task is waiting for a specific event to occur before it can continue. This could be waiting for a mutex to be released, a semaphore to be signaled, a message to arrive in a queue, or a specific time delay to expire. A blocked task does not consume any CPU time.
-4.  **Suspended:** The task has been explicitly moved out of the scheduling loop, often by another task or the kernel itself (e.g., using a `vTaskSuspend()` call). It will not run until it is explicitly "Resumed."
+### The Four States
+1.  **Running:** The task currently owns the CPU. In a single-core system, only one task can be in this state.
+2.  **Ready:** The task has everything it needs to run but isn't the highest priority currently. It is sitting in the Scheduler's **Ready List**.
+3.  **Blocked:** The task is waiting for an external event (a delay, a semaphore, or a queue). It is sitting in the Scheduler's **Blocked List** and consumes **zero CPU time**.
+4.  **Suspended:** The task has been "put to sleep" by an explicit API call (e.g., `vTaskSuspend`). It won't run until explicitly resumed.
 
-### State Transitions
-- **Ready → Running:** The scheduler selects the task because it is the highest-priority task in the Ready list.
-- **Running → Ready:** A higher-priority task becomes Ready (preemption), or the task's time slice expires (if round-robin is used for equal priorities).
-- **Running → Blocked:** The task requests a resource that isn't available or waits for an event/delay.
-- **Blocked → Ready:** The event the task was waiting for occurs (e.g., a mutex is released).
-- **Any State → Suspended:** A task is explicitly suspended via a system call.
-- **Suspended → Ready:** A task is explicitly resumed and is now eligible to be scheduled again.
+### How the Scheduler Pulls the Strings
+The Scheduler acts as the "Engine" for these state transitions. It reacts to three main triggers:
+
+| Trigger | Event | Scheduler's Action | Resulting State |
+| :--- | :--- | :--- | :--- |
+| **API Call** | `vTaskDelay(100)` | Moves the Running task to the **Blocked List**. | **Running → Blocked** |
+| **Tick Interrupt** | 100ms have passed | Moves the task from the **Blocked List** back to the **Ready List**. | **Blocked → Ready** |
+| **Resource Event** | A Semaphore is released | Moves the highest-priority task waiting for that semaphore to the **Ready List**. | **Blocked → Ready** |
+| **Preemption** | A high-priority task wakes up | Moves the current Running task to the **Ready List** and loads the new task. | **Running → Ready** |
+| **Manual Suspend** | `vTaskSuspend()` | Moves the task to the **Suspended List**, removing it from the scheduling loop. | **Any → Suspended** |
+
+### Visualization of State Transitions
+- **Ready → Running:** The Scheduler selects the task because it is the highest-priority "Ready" task.
+- **Running → Ready:** A higher-priority task becomes "Ready" (Preemption), or the task's time slice expires.
+- **Running → Blocked:** The task requests a resource (Mutex/Queue) that isn't available.
+- **Blocked → Ready:** The event the task was waiting for finally occurs.
+
+**Crucial Point:** A task **never** moves itself. It "requests" a state change by calling an API, but it's the **Scheduler** that physically moves the Task Control Block (TCB) between lists and performs the context switch.
+
+---
 
 ## The Idle Task: The Kernel's Unsung Hero
 
