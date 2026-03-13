@@ -101,6 +101,43 @@ When multiple tasks share the **same priority** and are all in the **Ready** sta
 
 ---
 
+## The Scheduler: Why Can't We Just Hardcode Priorities?
+
+A common question is: *"If we already know the priorities (Task A=3, Task B=2), why do we need a complex Scheduler? Can't we just hardcode the CPU to always run the highest number?"*
+
+The answer lies in the difference between a **Static Strategy** and a **Dynamic Reality**.
+
+### 1. High Priority $\neq$ Always Running
+A high-priority task (like a safety-critical sensor check) often spends **99% of its time doing nothing**. It might be waiting for:
+- A specific 10ms delay to pass.
+- A message to arrive from a UART port.
+- A user to press a button.
+
+If you "hardcoded" the execution based strictly on priority, the CPU would stay stuck on the high-priority task forever, even if that task was just "waiting." The **Scheduler** is needed to realize: *"Task A is high priority, but it's currently **Blocked**. Therefore, I will let Task B (Lower Priority) run for now."*
+
+### 2. The "Event" Problem (Asynchronicity)
+In embedded systems, things happen at random times.
+- An interrupt fires because a packet arrived.
+- A timer expires.
+- A hardware error occurs.
+
+You cannot hardcode the "termination" or "switching" points because you don't know **when** these events will happen. The Scheduler acts as an **Event Manager** that constantly re-evaluates the "Ready List" every time a system event occurs.
+
+### 3. Context Management
+When you switch from Task A to Task B, you have to save the "State" (CPU registers, Program Counter, Stack Pointer).
+- If you tried to hardcode this, your code would be a mess of `if-else` statements and manual register saving at every possible line of code.
+- The **Scheduler** automates this by performing a **Context Switch** during the Tick Interrupt or a System Call, making it invisible and "safe" for the developer.
+
+### Summary: Strategy vs. Engine
+| Component | Analogy | Role |
+| :--- | :--- | :--- |
+| **Preemptive Strategy** | The Rulebook | The logic that says: "Higher numbers win the CPU." |
+| **The Scheduler** | The Referee | The actual code that watches the clock, checks who is "Ready," and physically swaps the tasks in RAM. |
+
+**Without the Scheduler, your "Preemptive Strategy" is just a theory. The Scheduler is the engine that makes that theory a reality in a world of unpredictable events.**
+
+---
+
 ## Task States in an RTOS
 
 In an RTOS, a task is always in one of the following four states:
