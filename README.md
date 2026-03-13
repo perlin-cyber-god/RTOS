@@ -32,6 +32,36 @@ This repository explores the fundamentals and implementation of Real-Time Operat
 4. **Bounded Scheduling Latency:** The time taken to switch context from one task to another (after an event or interrupt) is constant ($O(1)$) and has a guaranteed upper bound.
 5. **Priority Inversion Avoidance:** Built-in mechanisms like Priority Inheritance or Priority Ceiling protocols prevent lower-priority tasks from indirectly blocking higher-priority ones.
 
+---
+
+## Scheduling Mechanisms: Preemption and Time Slicing
+
+The RTOS scheduler determines which task should be in the **Running** state based on their assigned priorities and the current scheduling policy.
+
+### 1. Preemptive Scheduling (Fixed Priority)
+In a preemptive system, the scheduler ensures that the **highest priority task** that is in the **Ready** state is always the one currently **Running**.
+
+- **The Preemption Event:** If Task A (Priority 2) is running and Task B (Priority 3) suddenly becomes **Ready** (e.g., a timer expires or an interrupt signals a semaphore), the scheduler immediately interrupts Task A.
+- **Context Switch:** The RTOS saves Task A's registers to its stack and loads Task B's context. Task B begins running instantly.
+- **Determinism:** This ensures that high-priority, time-critical tasks are never delayed by lower-priority application logic.
+
+### 2. Handling Equal Priority Tasks (Time Slicing)
+When multiple tasks share the **same priority** and are all in the **Ready** state, the RTOS typically employs **Round Robin Time Slicing**.
+
+- **The Tick Interrupt:** The RTOS kernel uses a hardware timer to generate a periodic "Tick Interrupt" (e.g., every 1ms).
+- **Time Slices:** Each task is given a "time slice" equal to one tick. When the tick interrupt occurs, the scheduler checks if there are other tasks of the same priority in the Ready list.
+- **Switching:** If other tasks exist at that priority, the scheduler performs a context switch to the next task in the sequence.
+- **Configuration:** In FreeRTOS, this behavior is controlled by `configUSE_TIME_SLICING`. If disabled, a task of equal priority will only yield the CPU if it explicitly blocks or is preempted by a higher-priority task.
+
+#### Visualization of Equal Priority Switching:
+| Tick | Running Task (Priority 2) | Ready List (Priority 2) |
+| :--- | :--- | :--- |
+| T0 | Task A | [Task B, Task C] |
+| T1 (Tick) | Task B | [Task C, Task A] |
+| T2 (Tick) | Task C | [Task A, Task B] |
+
+---
+
 ## Task States in an RTOS
 
 In an RTOS, a task is always in one of the following four states:
@@ -104,6 +134,39 @@ The **Tick Hook** is an optional callback function called by the RTOS kernel dur
 
 ---
 
+## The RTOS Heartbeat: CPU Clock vs. RTOS Tick
+
+The RTOS kernel does not have an internal "clock" that inherently knows what a millisecond is. Instead, it relies on a hardware timer (typically the **SysTick** timer in ARM Cortex-M processors) to "pulse" the CPU at regular intervals. This pulse is called the **RTOS Tick**.
+
+### 1. The Relationship
+- **CPU Clock (High Frequency):** This is the speed at which the processor executes instructions (e.g., 72 MHz).
+- **RTOS Tick (Low Frequency):** This is the frequency at which the scheduler wakes up to manage tasks (e.g., 1 kHz or 1 ms per tick).
+
+### 2. The Math: Cycles per Tick
+To generate a 1ms tick, the hardware timer must count a specific number of CPU clock cycles before triggering an interrupt.
+
+**Formula:**
+$$\text{Cycles per Tick} = \frac{\text{CPU Frequency (Hz)}}{\text{Target Tick Rate (Hz)}}$$
+
+**Example (72 MHz CPU):**
+If your CPU is at 72 MHz and you want a 1 ms tick (1,000 Hz):
+$$\frac{72,000,000 \text{ cycles/sec}}{1,000 \text{ ticks/sec}} = 72,000 \text{ cycles per tick}$$
+The SysTick hardware is programmed to count 72,000 cycles and then fire an interrupt.
+
+### 3. The Danger of Misconfiguration
+The RTOS kernel calculates the "Cycles per Tick" based on a constant you provide in your configuration (e.g., `configCPU_CLOCK_HZ` in FreeRTOS). If this value does not match the **actual** physical speed of your hardware, all time-based functions (`vTaskDelay`, timeouts, software timers) will be incorrect.
+
+#### Scenario: The 9-Second Delay
+If you tell the RTOS your CPU is at **72 MHz** but the hardware is actually running at **8 MHz**:
+1.  **The RTOS expects** 72,000 cycles to equal 1 ms.
+2.  **The 8 MHz Hardware** takes much longer to reach 72,000 cycles:
+    $$\frac{72,000 \text{ cycles}}{8,000,000 \text{ cycles/sec}} = 0.009 \text{ seconds (9 ms)}$$
+3.  **The Result:** Every "1 ms tick" in your code actually takes 9 ms of real time. A `vTaskDelay(1000)` (intended for 1 second) will actually take **9 seconds** to complete!
+
+---
+
+---
+
 ## Priority Inversion
 
 Priority inversion is a problematic scenario in real-time systems where a high-priority task is indirectly preempted by a lower-priority task, effectively "inverting" their assigned priorities.
@@ -125,3 +188,133 @@ Imagine a system where multiple tasks share an **I2C bus**, which can only handl
 ### Solutions:
 - **Priority Inheritance Protocol (PIP):** When **H** blocks on a resource held by **L**, **L**'s priority is temporarily boosted to match **H**. This prevents **M** from preempting **L**, allowing **L** to finish and release the resource quickly.
 - **Priority Ceiling Protocol (PCP):** Each resource is assigned a priority ceiling (the highest priority of any task that may lock it).
+
+---
+
+## Task Creation: `xTaskCreate`
+
+In an RTOS like FreeRTOS, the `xTaskCreate` function is used to create a new task and add it to the list of tasks that are ready to run. It allocates a **Task Control Block (TCB)** and a dedicated **Stack** for the task from the heap.
+
+### Function Signature
+```c
+BaseType_t xTaskCreate(
+    TaskFunction_t pvTaskCode,
+    const char * const pcName,
+    unsigned short usStackDepth,
+    void *pvParameters,
+    UBaseType_t uxPriority,
+    TaskHandle_t *pxCreatedTask
+);
+```
+
+### Parameter Breakdown
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `pvTaskCode` | `TaskFunction_t` | Pointer to the task entry function. This function must contain an infinite loop and should never return. |
+| `pcName` | `const char * const` | A descriptive name for the task. This is primarily used for debugging and is not used by the kernel for scheduling. |
+| `usStackDepth` | `unsigned short` | The number of **words** (not bytes) to allocate for the task's stack. For example, on a 32-bit architecture, a stack depth of 100 equates to 400 bytes. |
+| `pvParameters` | `void *` | A pointer to any data you want to pass into the task function when it starts. |
+| `uxPriority` | `UBaseType_t` | The priority at which the task will run. Systems typically use 0 for the lowest priority (Idle Task). Higher numbers represent higher priority. |
+| `pxCreatedTask` | `TaskHandle_t *` | An optional output parameter. It stores a "handle" to the task, which can be used later to delete or change the task's priority. |
+
+### Key Considerations for the User
+1. **Memory Allocation:** Ensure the `usStackDepth` is sufficient for the task's local variables and function call overhead. If the stack is too small, it will lead to a **Stack Overflow**, often crashing the system.
+2. **Priority Assignment:** RTOS scheduling is priority-based. A task with priority `5` will always preempt a task with priority `4` if both are in the **Ready** state.
+3. **The Task Function:** The function pointed to by `pvTaskCode` must look like this:
+   ```c
+   void vTaskFunction( void * pvParameters ) {
+       for( ;; ) {
+           // Task logic goes here
+       }
+   }
+   ```
+4. **Return Value:** The function returns `pdPASS` if the task was created successfully. If it returns `errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY`, it means the heap is full and the task could not be initialized.
+
+---
+
+## Debugging and I/O: Semihosting vs. UART
+
+When developing an RTOS application, you often need to print debug messages or log data. There are two primary ways to do this on ARM-based microcontrollers: **Semihosting** and **UART**.
+
+### 1. What is Semihosting?
+Semihosting is a mechanism that allows your ARM-based target code to utilize the Input/Output (I/O) facilities of your host computer (where your debugger is running).
+
+#### How It Works:
+1. **The Request:** When your code calls a standard function like `printf()` or `scanf()`, the MCU executes a specific **Supervisor Call (SVC)** or breakpoint instruction.
+2. **The Halt:** The MCU completely **stops execution**.
+3. **The Exchange:** The Debug Probe (e.g., ST-Link) detects the halt, reads the CPU registers to see what you wanted to print, and sends that data to your IDE terminal (VS Code/PlatformIO).
+4. **The Resume:** Once the host is finished processing the I/O, it tells the MCU to wake up and continue execution.
+
+#### Why Use It? (The Benefits)
+- **Zero Hardware Setup:** No extra pins, no USB-to-TTL dongles, and no baud rate calculations. If your debug cable is plugged in, it works.
+- **File System Access:** This is its "secret weapon." You can write code on your MCU that opens, reads, or writes files directly on your PC's hard drive (e.g., `fopen("data.txt", "w")`).
+- **Early-Stage Debugging:** It works even before you have configured the system clocks or UART peripherals, as it relies on the CPU's internal architecture.
+
+#### The "Catch": Why RTOS Developers Avoid It
+Semihosting is a **"Stop-the-World"** operation. Because the CPU literally pauses, your **RTOS Ticks will stop**.
+- **Example:** If you have a task that needs to run every 10ms, but a `printf()` via semihosting takes 50ms to process, your entire system timing will break. This is why semihosting is rarely used in production real-time systems.
+
+---
+
+### 2. Using UART (The Standard Approach)
+UART (Universal Asynchronous Receiver-Transmitter) is the preferred method for logging in an RTOS environment because it is asynchronous and does not halt the CPU.
+
+#### The Hardware Connection (The Crossover):
+To connect your MCU to a PC via a USB-to-TTL dongle, you must cross the wires:
+- **MCU TX** $\rightarrow$ **Dongle RX** (e.g., PA2 on STM32)
+- **MCU RX** $\leftarrow$ **Dongle TX** (e.g., PA3 on STM32)
+- **GND** $\leftrightarrow$ **GND** (Crucial: Both must share a common "zero" voltage).
+
+#### Why UART is Superior for RTOS:
+- **Non-Blocking:** You can send data to the UART buffer and continue executing code immediately while the hardware handles the transmission in the background.
+- **Real-Time Friendly:** It doesn't stop the system clock or the RTOS scheduler. Your tasks and interrupts continue to run as intended while debug logs are sent to tools like **Tera Term**, **Putty**, or **minicom**.
+
+---
+
+## Memory Allocation: What Happens in RAM?
+
+When you call `xTaskCreate`, the RTOS kernel performs specific memory operations within the system's RAM. Understanding how memory is partitioned is crucial for avoiding crashes like stack overflows or heap exhaustion.
+
+### 1. The RAM Layout
+The system's RAM is generally divided into two main regions:
+- **Static Memory:** Used for global data, static variables, and arrays defined at compile-time.
+- **The Heap:** A pool of memory (defined by `configTOTAL_HEAP_SIZE` in FreeRTOS) used for **dynamically created** kernel objects.
+
+### 2. Task Creation in the Heap
+As soon as `xTaskCreate` is called, the kernel carves out two distinct blocks of memory from the Heap for the new task:
+
+| Component | Purpose | Memory Type |
+| :--- | :--- | :--- |
+| **TCB (Task Control Block)** | A small structure containing the task's metadata (priority, state, name, stack pointer). | Allocated from Heap |
+| **Task Stack** | A dedicated area where the task stores its local variables, function return addresses, and CPU register states during a context switch. | Allocated from Heap |
+
+### 3. Other Dynamic Kernel Objects
+The same Heap space is used whenever you create other RTOS primitives. Each has its own "Control Block":
+
+- **Semaphores:** The kernel allocates a **Semaphore Control Block (SCB)**.
+- **Queues:** The kernel allocates a **Queue Control Block (QCB)** and a separate **Item List** to store the actual data packets.
+
+### Visual Representation of the RTOS Heap
+
+```text
+Low Address                                               High Address
++--------------------------------------------------------------------+
+|                      SYSTEM RAM (TOTAL)                            |
++----------------------+---------------------------------------------+
+|     Static Data      |            RTOS HEAP (Dynamic)              |
+| (Globals, Statics)   |        (configTOTAL_HEAP_SIZE)              |
++----------------------+---------------------------------------------+
+                       |                                             |
+                       |  [Task 1]  TCB1 | STACK 1                   |
+                       |  [Task 2]  TCB2 | STACK 2                   |
+                       |  [Sem]     SCB                              |
+                       |  [Queue]   QCB  | ITEM LIST                 |
+                       |  [Free]    Unallocated Memory               |
+                       |                                             |
+                       +---------------------------------------------+
+```
+
+### Key Takeaway
+Every time you create a Task, Semaphore, or Queue, the "Free" space in the RTOS Heap shrinks. If the Heap is too small, `xTaskCreate` will fail and return an error code, even if there is plenty of "Static Data" space available.
+
