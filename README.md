@@ -353,6 +353,30 @@ monitor_port = socket://localhost:19021
 
 ---
 
+## ST-Link vs. SEGGER J-Link: A Comparison
+
+When working with STM32, you will encounter two main debug probes. Understanding their differences is key to choosing the right tool for your development stage.
+
+| Feature | ST-Link (STMicroelectronics) | SEGGER J-Link |
+| :--- | :--- | :--- |
+| **Compatibility** | **Locked:** Only works with STM8 and STM32 chips. | **Universal:** Supports ARM Cortex-M/R/A, RISC-V, and chips from almost all vendors (NXP, TI, Microchip, etc.). |
+| **Speed** | **Standard:** SWD speeds usually max out around 4-10 MHz. | **High-Speed:** Professional versions reach up to 50 MHz. Much faster firmware uploads. |
+| **Breakpoints** | **Limited:** Restricted to the hardware breakpoints built into the MCU (usually 6-8). | **Unlimited:** Can set unlimited breakpoints even in Flash memory using SEGGER software. |
+| **Real-Time Data** | **Basic:** Relies on UART or ITM (Instruction Trace Macrocell). | **Advanced (RTT):** Real-Time Transfer allows massive data throughput without halting the CPU. |
+| **Visualization** | **Minimal:** Basic variable watching and simple graphing in STM32CubeIDE. | **Professional (SystemView):** Provides a full visual timeline of OS tasks, interrupts, and CPU load. |
+| **Cost** | **Cheap/Free:** Often built into Nucleo boards for $10-$20. | **Expensive:** Professional versions cost hundreds of dollars (though EDU and "OB" versions are affordable). |
+
+### Summary: Which one should you use?
+
+1.  **Use ST-Link if:** You are a beginner, working exclusively with STM32, and just need to upload code and do basic step-through debugging.
+2.  **Use J-Link if:**
+    - You need to debug complex timing issues (using SystemView).
+    - You are working with non-ST microcontrollers (like Nordic or NXP).
+    - You are tired of hitting the "6 breakpoint limit" in large projects.
+    - You want the fastest possible upload speeds during a rapid "code-flash-test" cycle.
+
+---
+
 ## Memory Allocation: What Happens in RAM?
 
 When you call `xTaskCreate`, the RTOS kernel performs specific memory operations within the system's RAM. Understanding how memory is partitioned is crucial for avoiding crashes like stack overflows or heap exhaustion.
