@@ -118,33 +118,41 @@ In an RTOS, a task is always in one of the following four states:
 - **Any State → Suspended:** A task is explicitly suspended via a system call.
 - **Suspended → Ready:** A task is explicitly resumed and is now eligible to be scheduled again.
 
-## The Idle Task
+## The Idle Task: The Kernel's Unsung Hero
 
-The Idle Task is a special task created automatically by the RTOS kernel when the scheduler is started. It ensures that there is always at least one task capable of running on the CPU.
+The **Idle Task** is a special system task created **automatically** by the RTOS kernel when the scheduler is started (e.g., when calling `vTaskStartScheduler()` in FreeRTOS). It is the kernel's "fallback" mechanism to ensure the CPU is always doing something valid.
 
-### Key Characteristics:
-- **Automatic Creation:** It is initialized by the kernel during the scheduling startup phase.
-- **Lowest Priority:** It is assigned the lowest possible priority (typically 0) to ensure it never consumes CPU time if any application task is in the **Ready** state.
-- **Always Available:** When no other task is in the **Running** or **Ready** state, the Idle Task becomes the **Running** task.
+### 1. Automatic Creation and Priority
+You never need to call `xTaskCreate` for the Idle Task. The kernel initializes it during the startup phase to ensure there is **always** at least one task in the **Ready** or **Running** state.
 
-### Responsibilities:
-1. **Memory Management (The "Housekeeper"):** When a task deletes itself (e.g., `vTaskDelete(NULL)`), it cannot free its own memory because it is still using its stack to execute the deletion code. The RTOS marks the task as deleted, and the **Idle Task** is responsible for actually freeing the memory (Stack and TCB) allocated to that deleted task. 
-   - *Note:* If Task A deletes Task B, the memory can often be freed immediately; the Idle Task is specifically required for *self-deleting* tasks.
-2. **Low Power Management (Idle Hook):** RTOS allows the use of an **Application Idle Hook**—a callback function within the Idle Task. This is often used to put the CPU into a low-power or sleep mode when no useful application tasks are executing, significantly reducing power consumption.
-3. **Background Processing:** It can be used to perform background activities like system telemetry or watchdog "kicking" without interfering with time-critical tasks.
+- **Priority 0:** It is assigned the lowest possible priority. This ensures it never "steals" time from your application tasks. It only runs when every other task in the system is either **Blocked** or **Suspended**.
+- **The "Infinite Loop":** Like all RTOS tasks, it contains an infinite loop. If no other work is available, the CPU just cycles through this loop.
 
-### Implementing the Idle Hook (FreeRTOS Example)
-To use the idle hook in FreeRTOS:
-1.  **Enable the Feature:** Set `configUSE_IDLE_HOOK` to `1` in your `FreeRTOSConfig.h`.
-2.  **Define the Callback:** Implement the following function in your application code:
-    ```c
-    void vApplicationIdleHook( void ) {
-        /* Application specific code here */
-        // Example: Put MCU in sleep mode
-        __WFI(); // Wait For Interrupt
-    }
-    ```
-3.  **Critical Rule:** The idle hook function **must not** call any API functions that could cause the idle task to **Block** (e.g., `vTaskDelay()` or waiting for a semaphore). The idle task must always be ready to run.
+### 2. Core Responsibilities: The "Housekeeper"
+The Idle Task performs essential maintenance that application tasks cannot do for themselves:
+
+- **Cleaning Up After Self-Deletion:** When a task calls `vTaskDelete(NULL)`, it is asking to be killed. However, a task cannot free its own stack and TCB memory while it is still using that stack to execute the deletion code! 
+- **The Handover:** The kernel marks the task as "Ready to be deleted" and moves it to a termination list. The **Idle Task** then scans this list and actually frees the memory (RAM) back to the heap.
+- **Critical Note:** If your application creates and deletes tasks frequently but **never** allows the Idle Task to run (because higher-priority tasks are hogging the CPU), your system will eventually run out of memory (Heap Exhaustion).
+
+### 3. Power Management (The Idle Hook)
+In modern embedded systems, the Idle Task is where **Power Saving** happens. Instead of just "spinning" in a loop and wasting battery, you can use an **Application Idle Hook**.
+
+| Feature | Description |
+| :--- | :--- |
+| **Low Power Mode** | You can use the `__WFI()` (Wait For Interrupt) instruction inside the hook to put the CPU into a sleep state. |
+| **Background Processing** | Use it to calculate CPU load statistics or "kick" a watchdog timer. |
+| **Continuous Availability** | The hook must **never** block. It must be ready to yield the CPU the microsecond a higher-priority task wakes up. |
+
+### Summary of Idle Task Properties
+
+| Property | Value/Behavior |
+| :--- | :--- |
+| **Created By** | RTOS Kernel (Automatic) |
+| **Priority** | 0 (Lowest) |
+| **Stack Size** | Defined by `configMINIMAL_STACK_SIZE` |
+| **Can it Block?** | **No.** It must always be in the Ready/Running state. |
+| **Can it be Deleted?** | **No.** The system would crash if no tasks were ready to run. |
 
 ---
 
