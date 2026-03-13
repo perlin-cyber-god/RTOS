@@ -229,6 +229,35 @@ The Scheduler acts as the "Engine" for these state transitions. It reacts to thr
 
 ---
 
+## Under the Hood: Architecture Specifics (ARM Cortex-M)
+
+If you look into your FreeRTOS library files, you will see two files that contain the "glue" code between the RTOS kernel and your STM32's hardware: `port.c` and `portmacro.h`. These are architecture-specific (e.g., for ARM Cortex-M3 on the Nucleo-F103RB).
+
+The Scheduler relies on three critical ARM hardware exceptions to function:
+
+### 1. `vPortSVCHandler` (Supervisor Call - SVC)
+- **Triggered By:** The `SVC` instruction.
+- **Role:** It is used primarily to **launch the very first task** when you call `vTaskStartScheduler()`. 
+- **The Scene:** It forces the CPU into a privileged state and sets up the stack for the first task so it can start running safely.
+
+### 2. `xPortPendSVHandler` (Pendable Service Call - PendSV)
+- **Triggered By:** Setting the `PendSV` bit in the CPU's Interrupt Control State Register (ICSR).
+- **Role:** This is the heart of **Context Switching**.
+- **The Scene:** Unlike a normal interrupt, `PendSV` is designed to be delayed until no other high-priority interrupts are running. When it finally fires, it saves the current task's registers (R0-R15), finds the next highest-priority task, and loads its registers.
+
+### 3. `xPortSysTickHandler` (SysTick)
+- **Triggered By:** The internal ARM **SysTick Timer** (hardware timer).
+- **Role:** It implements the **RTOS Tick management**.
+- **The Scene:** Every 1ms (or whatever your tick rate is), this interrupt fires. It increments the system's "Tick Count," checks if any tasks in the Blocked list have timed out, and then "pends" a `PendSV` to check if a context switch is needed.
+
+### Summary: The Context Switching Workflow
+1.  **SysTick** fires every 1ms.
+2.  It realizes a higher-priority task has finished its `vTaskDelay`.
+3.  It triggers a **PendSV** interrupt.
+4.  **PendSV** saves the current task, loads the new one, and the Scheduler has successfully performed its job.
+
+---
+
 ## The Idle Task: The Kernel's Unsung Hero
 
 The **Idle Task** is a special system task created **automatically** by the RTOS kernel when the scheduler is started (e.g., when calling `vTaskStartScheduler()` in FreeRTOS). It is the kernel's "fallback" mechanism to ensure the CPU is always doing something valid.
