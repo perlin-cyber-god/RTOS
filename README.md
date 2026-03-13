@@ -156,6 +156,34 @@ In modern embedded systems, the Idle Task is where **Power Saving** happens. Ins
 
 ---
 
+## The Timer Service Task (Timer Daemon)
+
+While the **Idle Task** handles system maintenance, the **Timer Service Task** (also known as the **Timer Daemon**) is responsible for managing all **Software Timers** in your application.
+
+### 1. Automatic Creation
+This task is created automatically by the RTOS kernel during the scheduling startup phase, but **only if** you have enabled software timers in your configuration:
+- `configUSE_TIMERS = 1` in `FreeRTOSConfig.h`.
+- If you don't need software timers, setting this to `0` will save RAM by not creating this task or its associated command queue.
+
+### 2. Core Responsibilities
+The Timer Daemon is the "brain" behind every software timer you create (e.g., using `xTimerCreate`). Its primary duties include:
+- **Tracking Timeouts:** It keeps track of when a timer is set to expire.
+- **Executing Callbacks:** When a timer expires, the Timer Daemon is the task that actually calls the **Timer Callback Function**.
+- **Command Processing:** It listens to a "Timer Command Queue." When your application tasks start, stop, or change a timer, they send a message to this queue, which the Timer Daemon then processes.
+
+### 3. The "Execution Context" Warning
+A very common mistake for beginners is forgetting **which task** is running their timer code.
+- **Context:** All software timer callback functions execute in the **context of the Timer Daemon task**.
+- **The Rule:** You must **never** call an RTOS API function that could cause the task to **Block** (like `vTaskDelay()` or waiting for a semaphore) inside a timer callback.
+- **The Consequence:** If you block the Timer Daemon, **all other software timers in your system will stop working**, as the daemon won't be able to process the next expiration or command.
+
+### 4. Configuration Impact
+Because the Timer Daemon is a task itself, it has its own settings in `FreeRTOSConfig.h`:
+- `configTIMER_TASK_PRIORITY`: Usually set to a high priority to ensure timers expire with high precision.
+- `configTIMER_TASK_STACK_DEPTH`: Must be large enough to handle the logic inside all your timer callback functions.
+
+---
+
 ## The Tick Hook Function
 
 The **Tick Hook** is an optional callback function called by the RTOS kernel during each **Tick Interrupt**. It is often used to implement software timers or periodic checks that must happen with high frequency and precision.
