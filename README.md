@@ -272,6 +272,48 @@ To connect your MCU to a PC via a USB-to-TTL dongle, you must cross the wires:
 
 ---
 
+## Advanced Debugging: SEGGER J-Link & SystemView
+
+As your RTOS projects grow in complexity (e.g., dealing with deadlocks or complex priority inversion), standard text-based logging via UART might not be enough. This is where the **SEGGER ecosystem** provides a massive advantage.
+
+### 1. Why Switch to SEGGER?
+While the Nucleo boards come with an ST-Link, you can "reflash" them to act as a **SEGGER J-Link**. This unlocks professional-grade tools:
+
+- **SystemView (The "X-Ray"):** Instead of reading text, you see a live visual timeline of your OS. It shows exactly when Task A preempted Task B, how long an ISR took to execute, and if any tasks are missing their deadlines.
+- **RTT (Real-Time Transfer):** A high-speed replacement for UART (up to 3.5 MB/s) that sends data through the debug cable **without** stopping the CPU. No pins or baud rates required.
+- **Unlimited Breakpoints:** Standard STM32 chips are limited to ~6 hardware breakpoints. SEGGER software allows you to set unlimited breakpoints in Flash memory.
+
+### 2. Setting Up J-Link on Nucleo (F103RB)
+
+If you are using a Nucleo-F103RB, you can convert your on-board ST-Link into a J-Link OB (On-Board) using these steps:
+
+1. **Download the Reflash Tool:** Get the [ST-Link Reflash Utility](https://www.segger.com/products/debug-probes/j-link/models/other-j-links/st-link-on-board/) from SEGGER.
+2. **Upgrade:** Plug in your Nucleo, run the tool, and select **"Upgrade to J-Link."** Your board will now be recognized as a J-Link.
+3. **Install SystemView:** Download [SEGGER SystemView](https://www.segger.com/products/development-tools/systemview/) to begin visualizing your FreeRTOS schedule.
+
+### 3. Integration with PlatformIO
+To use your newly converted J-Link in a PlatformIO project, update your `platformio.ini` file:
+
+```ini
+[env:nucleo_f103rb]
+platform = ststm32
+board = nucleo_f103rb
+framework = arduino ; or stm32cube
+
+; Change upload and debug protocol to jlink
+upload_protocol = jlink
+debug_tool = jlink
+
+; Optional: Monitor via RTT instead of UART
+monitor_port = socket://localhost:19021
+```
+
+### 4. Recommendation: When to Switch?
+- **Stick with UART for now:** It is simpler for "Hello World" and basic task logic.
+- **Switch to SEGGER/SystemView:** When you start dealing with **Priority Inversion**, **Deadlocks**, or timing-critical bugs that require seeing the exact moment a context switch occurs.
+
+---
+
 ## Memory Allocation: What Happens in RAM?
 
 When you call `xTaskCreate`, the RTOS kernel performs specific memory operations within the system's RAM. Understanding how memory is partitioned is crucial for avoiding crashes like stack overflows or heap exhaustion.
