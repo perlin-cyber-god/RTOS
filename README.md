@@ -138,6 +138,37 @@ When you switch from Task A to Task B, you have to save the "State" (CPU registe
 
 ---
 
+## Scheduling Policies: The Scheduler's Decision Algorithm
+
+The **Scheduling Policy** is the specific algorithm the Scheduler uses to decide which task should be in the **Running** state at any point in time. While there are several options, most real-time systems (like FreeRTOS) default to a specific type for maximum reliability.
+
+### 1. Simple Pre-emptive Scheduling (Round Robin)
+In this policy, all tasks are treated equally. There are no priorities.
+- **The Process:** Each task is given a fixed "time slice" (a tick). When the tick interrupt occurs, the Scheduler simply moves to the next task in the list.
+- **Use Case:** Systems where no task is more important than another. It ensures "fairness" but provides zero real-time guarantees for critical events.
+
+### 2. Priority-Based Pre-emptive Scheduling (The RTOS Standard)
+This is the **default** for FreeRTOS and almost all professional RTOSs.
+- **The Process:** Every task is assigned a priority number. The Scheduler **must** always run the "Ready" task with the highest priority.
+- **Preemption:** If a high-priority task suddenly becomes ready (even in the middle of a low-priority task's time slice), the Scheduler **immediately** stops the low-priority task and switches.
+- **Why it's the King:** This ensures that time-critical tasks (like safety sensors or motor controls) are serviced with microsecond precision, regardless of what else the CPU is doing.
+
+### 3. Co-operative Scheduling
+This is a more "polite" but less deterministic approach.
+- **The Process:** A task continues to run until it **explicitly** decides to give up the CPU (by calling `vTaskDelay` or `taskYIELD`).
+- **No Preemption:** Even if a high-priority task becomes ready, it will **not** interrupt the current task until that task finishes its work or voluntarily yields.
+- **The Danger:** If a task gets stuck in an infinite loop without yielding, the entire system (including all other tasks) will freeze forever.
+
+### Comparison Table
+
+| Policy | Decision Logic | Preemption? | Best For... |
+| :--- | :--- | :--- | :--- |
+| **Round Robin** | Fairness (Equal slices) | Yes (on Tick) | Simple, non-critical multitasking. |
+| **Priority-Based** | Importance (Highest number) | **Yes (Immediate)** | **Real-time systems / FreeRTOS default.** |
+| **Co-operative** | Manual (Wait for Yield) | **No** | Very simple systems with trusted tasks. |
+
+---
+
 ## Task States: The Scheduler as a "State Machine Manager"
 
 In an RTOS, the Scheduler doesn't just decide who runs; it actively manages the **lifecycle** of every task. It maintains internal "Ready," "Blocked," and "Suspended" lists (sets of TCBs) and moves tasks between them based on system events.
