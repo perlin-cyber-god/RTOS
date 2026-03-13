@@ -169,6 +169,35 @@ This is a more "polite" but less deterministic approach.
 
 ---
 
+### Configuring the Scheduler in `FreeRTOSConfig.h`
+
+In a PlatformIO or any FreeRTOS project, you select the scheduling policy by modifying specific **#define** macros in the `FreeRTOSConfig.h` file (usually found in the `include` folder).
+
+#### 1. To enable Priority-Based Pre-emptive Scheduling (Standard):
+```c
+#define configUSE_PREEMPTION                    1
+#define configUSE_TIME_SLICING                  1
+```
+*   `configUSE_PREEMPTION = 1`: Allows higher-priority tasks to interrupt lower-priority ones.
+*   `configUSE_TIME_SLICING = 1`: Enables Round Robin for tasks sharing the **same** priority level.
+
+#### 2. To enable Simple Pre-emptive Scheduling (Round Robin):
+*Set all task priorities to the same value (e.g., 1) and keep the above settings.*
+
+#### 3. To enable Co-operative Scheduling:
+```c
+#define configUSE_PREEMPTION                    0
+```
+*When this is 0, the scheduler will **never** interrupt a task. It will only switch when the current task calls a function like `taskYIELD()` or `vTaskDelay()`.*
+
+#### 4. To disable Round Robin (Equal Priority):
+```c
+#define configUSE_TIME_SLICING                  0
+```
+*With this setting, if two tasks have the same priority, the first one to start running will stay running until it blocks or is preempted by a **higher** priority task. They won't "share" time.*
+
+---
+
 ## Task States: The Scheduler as a "State Machine Manager"
 
 In an RTOS, the Scheduler doesn't just decide who runs; it actively manages the **lifecycle** of every task. It maintains internal "Ready," "Blocked," and "Suspended" lists (sets of TCBs) and moves tasks between them based on system events.
