@@ -635,3 +635,14 @@ Low Address                                               High Address
 ### Key Takeaway
 Every time you create a Task, Semaphore, or Queue, the "Free" space in the RTOS Heap shrinks. If the Heap is too small, `xTaskCreate` will fail and return an error code, even if there is plenty of "Static Data" space available.
 
+---
+
+## Conclusion
+
+This repository serves as a comprehensive guide to understanding and implementing Real-Time Operating Systems. By exploring hardware platforms like STM32, ESP32, and Raspberry Pi, we've highlighted the critical balance between determinism, processing power, and connectivity.
+
+Through the study of scheduling mechanisms—from preemptive and time-slicing to co-operative policies—we've seen how an RTOS ensures that high-priority tasks meet their deadlines with microsecond precision. We've also delved into the internal mechanics of the kernel, including task state management, memory allocation, and the vital roles of the Idle and Timer Service tasks.
+
+Furthermore, we've compared debugging methodologies, demonstrating why professional tools like SEGGER J-Link and SystemView are essential for visualizing complex system behaviors and resolving issues like priority inversion.
+
+Ultimately, mastering these concepts is fundamental to building reliable, predictable, and high-performance embedded systems. Whether you are controlling a medical device or orchestrating an industrial robot, the principles of RTOS provide the foundation for success in the world of real-time computing.
