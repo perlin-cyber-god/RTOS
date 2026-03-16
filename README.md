@@ -41,6 +41,8 @@ The RPi 5 isn't a microcontroller; it's a **Full Computer (SBC)**. It runs Linux
 
 ---
 
+Project status: proj 1 has been tested and deployed.
+
 ## GPOS vs. RTOS: Key Differences
 
 ### General Purpose Operating System (GPOS)
