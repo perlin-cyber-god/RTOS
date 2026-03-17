@@ -682,6 +682,24 @@ This project implements a dual-task FreeRTOS system on the STM32 Nucleo-F103RB, 
     - **Task 2:** Placeholder for background logic, yielding every 1000ms.
 - **Verification:** Empirically verified timing accuracy after correcting the clock frequency mismatch.
 
+### Implementation: Round-Robin Scheduling in Action
+
+We have successfully implemented a textbook example of **Round-Robin Scheduling** by creating two tasks with the exact same priority.
+
+#### The Setup:
+- **Task 1 (Priority 2):** Prints "Hello World from Task-1" via USART2.
+- **Task 2 (Priority 2):** Prints "Hello World from Task-2" via USART2.
+- Both tasks use `vTaskDelay(pdMS_TO_TICKS(1000))` to yield the CPU.
+
+#### Why it Works:
+Because both tasks share **Priority 2**, FreeRTOS acts as the ultimate fair referee. Here is exactly what is happening in the terminal:
+1. **Task-1** wakes up, prints its message, and tells the OS: *"I'm going to block (sleep) for 1000 ticks. Let someone else use the CPU."*
+2. The OS instantly saves Task-1's state, switches context, and hands the CPU over to **Task-2**.
+3. **Task-2** prints its message and also goes to sleep for 1000 ticks.
+4. The OS idles in the background until those timers expire, and the cycle repeats flawlessly.
+
+This rapid and reliable switching—**the context switch**—is the fundamental heartbeat of advanced embedded engineering. It is the same underlying architecture used in multi-drone flight controllers to juggle sensor reading, spatial positioning, and motor adjustments simultaneously without failure.
+
 ### How the Programming Works
 1.  **PlatformIO Workflow:** I used the `pio run --target upload` command to automate the compilation and flashing process.
 2.  **ST-Link Communication:** The board was programmed via the integrated ST-Link debugger using the **SWD** (Serial Wire Debug) protocol.
