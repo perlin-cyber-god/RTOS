@@ -41,8 +41,6 @@ The RPi 5 isn't a microcontroller; it's a **Full Computer (SBC)**. It runs Linux
 
 ---
 
-Project status: proj 1 has been tested and deployed.
-
 ## GPOS vs. RTOS: Key Differences
 
 ### General Purpose Operating System (GPOS)
@@ -648,3 +646,30 @@ Through the study of scheduling mechanisms—from preemptive and time-slicing to
 Furthermore, we've compared debugging methodologies, demonstrating why professional tools like SEGGER J-Link and SystemView are essential for visualizing complex system behaviors and resolving issues like priority inversion.
 
 Ultimately, mastering these concepts is fundamental to building reliable, predictable, and high-performance embedded systems. Whether you are controlling a medical device or orchestrating an industrial robot, the principles of RTOS provide the foundation for success in the world of real-time computing.
+
+---
+
+## Project 1: STM32 Nucleo-F103RB RTOS Deployment
+**Status:** Tested and Deployed.
+
+This project implements a dual-task FreeRTOS system on the STM32 Nucleo-F103RB, demonstrating real-time multitasking and precise hardware control.
+
+### Accomplishments
+- **Environment Setup:** Configured PlatformIO to target the Nucleo-F103RB board with the STM32Cube framework.
+- **Hardware Integration:** Initialized the onboard LED (LD2) on pin **PA5**.
+- **Clock Configuration:** Successfully configured the system to **72MHz** using the HSE (External Crystal) and PLL.
+- **Multitasking:** 
+    - **Task 1:** Toggles the onboard LED every 500ms (High Precision).
+    - **Task 2:** Placeholder for background logic, yielding every 1000ms.
+- **Verification:** Empirically verified timing accuracy after correcting the clock frequency mismatch.
+
+### How the Programming Works
+1.  **PlatformIO Workflow:** I used the `pio run --target upload` command to automate the compilation and flashing process.
+2.  **ST-Link Communication:** The board was programmed via the integrated ST-Link debugger using the **SWD** (Serial Wire Debug) protocol.
+3.  **OpenOCD Integration:** PlatformIO invoked OpenOCD to bridge the gap between the binary `firmware.elf` and the STM32's flash memory.
+
+### Behaviour Explanation: The "Slow Blink" Debug
+Initially, the LED blinked every ~4.5 seconds instead of 0.5 seconds.
+- **Cause:** The RTOS kernel calculated its 1ms "Tick" based on an expected **72MHz** clock (`configCPU_CLOCK_HZ`). However, the hardware was actually running on its internal **8MHz** HSI oscillator.
+- **Math:** $\frac{72MHz}{8MHz} = 9$. Thus, every requested delay was 9x slower than intended.
+- **Fix:** We implemented `SystemClock_Config()` to explicitly engage the PLL and set the CPU to 72MHz, restoring microsecond-level precision.
