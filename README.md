@@ -654,6 +654,33 @@ Low Address                                               High Address
 ### Key Takeaway
 Every time you create a Task, Semaphore, or Queue, the "Free" space in the RTOS Heap shrinks. If the Heap is too small, `xTaskCreate` will fail and return an error code, even if there is plenty of "Static Data" space available.
 
+### Deep Dive: Learning UART through Electricity
+
+This project provides a perfect opportunity to connect the C code in `main.c` to the physical signals observed on a logic analyzer. UART (Universal Asynchronous Receiver-Transmitter) is the "bridge" between our STM32 and the laptop.
+
+#### 1. The Asynchronous Secret: Baud Rate
+Unlike protocols like SPI, UART has no "Clock" wire to tell the receiver when to read. Instead, both devices agree on a **Baud Rate**. In our project, we use `115200`.
+- **Timing is Everything:** At 115200 bits per second, each single bit lasts exactly **8.68µs**. 
+- **Synchronization:** When you tell your logic analyzer the baud rate is 115200, it "knows" to wait for the signal to drop (Start Bit) and then sample the line every 8.68µs to determine if the bit is a 1 (High) or 0 (Low).
+
+#### 2. How "Hello World" Becomes Electricity
+When our FreeRTOS tasks call `printf("H")`, the USART2 hardware performs a **Parallel to Serial** conversion:
+- **Idle State:** The line sits at Logic HIGH (3.3V). This is the "silence" before the data starts.
+- **The Start Bit:** To signal the start of a byte, the STM32 pulls the line LOW for exactly 1 bit-period (8.68µs). This is the "Wake Up" call for the ST-LINK.
+- **The Data Bits (The Payload):** The letter 'H' in ASCII is `0x48` (`01001000` in binary). The STM32 flips its internal switches to represent these 1s and 0s as square waves between 0V and 3.3V.
+- **The Stop Bit:** After 8 bits, the line returns to HIGH, ensuring it is ready for the next Start Bit.
+
+#### 3. Why CN3 RX? (The "Ear" on the Wire)
+This is a common point of confusion:
+- The **STM32** is the Transmitter (TX). It "talks" on its TX pin (**PA2**).
+- The **ST-LINK** chip (the debugger) is the Receiver (RX). It "listens" on its RX pin.
+Because we want to "hear" what the STM32 is saying using the logic analyzer, we must place our probe on the wire the ST-LINK is listening to. That is why we tap the **RX** pin on the **CN3** jumper.
+
+#### 4. UART in the FreeRTOS Lifecycle
+In our code, Task-1 and Task-2 blast their messages and then call `vTaskDelay(pdMS_TO_TICKS(1000))`. 
+- **On the Analyzer:** You will see a **cluster of waves** (the "Hello World" string) followed by a **long, flat HIGH line**. 
+- **The "Silence":** That flat line is the electrical representation of the task's 1-second sleep. While the task is in the **Blocked** state, the UART hardware is idle, and the line stays at 3.3V.
+
 ---
 
 ## Conclusion
@@ -675,12 +702,12 @@ This project implements a dual-task FreeRTOS system on the STM32 Nucleo-F103RB, 
 
 ### Accomplishments
 - **Environment Setup:** Configured PlatformIO to target the Nucleo-F103RB board with the STM32Cube framework.
-- **Hardware Integration:** Initialized the onboard LED (LD2) on pin **PA5**.
+- **Hardware Integration:** Initialized USART2 on pins **PA2 (TX)** and **PA3 (RX)** for terminal output.
 - **Clock Configuration:** Successfully configured the system to **72MHz** using the HSE (External Crystal) and PLL.
 - **Multitasking:** 
-    - **Task 1:** Toggles the onboard LED every 500ms (High Precision).
-    - **Task 2:** Placeholder for background logic, yielding every 1000ms.
-- **Verification:** Empirically verified timing accuracy after correcting the clock frequency mismatch.
+    - **Task 1:** Prints "Hello World from Task-1" every 1000ms (Priority 2).
+    - **Task 2:** Prints "Hello World from Task-2" every 1000ms (Priority 2).
+- **Verification:** Observed Round-Robin scheduling and verified timing via logic analyzer tapping CN3 RX.
 
 ### Implementation: Round-Robin Scheduling in Action
 
