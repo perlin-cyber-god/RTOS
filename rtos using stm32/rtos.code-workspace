@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../rtos"
+		},
+		{
+			"name": "rtos using stm32",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
