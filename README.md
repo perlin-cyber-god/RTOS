@@ -450,40 +450,59 @@ BaseType_t xTaskCreate(
 
 ## Debugging and I/O: Semihosting vs. UART
 
-When developing an RTOS application, you often need to print debug messages or log data. There are two primary ways to do this on ARM-based microcontrollers: **Semihosting** and **UART**.
+Normally, a microcontroller has no idea what a "screen" or a "console" is. To see what's happening inside, we have two primary methods: **Semihosting** and **UART**.
 
-### 1. What is Semihosting?
-Semihosting is a mechanism that allows your ARM-based target code to utilize the Input/Output (I/O) facilities of your host computer (where your debugger is running).
+### 1. Semihosting (The Debugger Trick)
+Semihosting is a clever trick designed by ARM to let the microcontroller borrow (host) the screen and keyboard of your laptop.
 
-#### How It Works:
-1. **The Request:** When your code calls a standard function like `printf()` or `scanf()`, the MCU executes a specific **Supervisor Call (SVC)** or breakpoint instruction.
-2. **The Halt:** The MCU completely **stops execution**.
-3. **The Exchange:** The Debug Probe (e.g., ST-Link) detects the halt, reads the CPU registers to see what you wanted to print, and sends that data to your IDE terminal (VS Code/PlatformIO).
-4. **The Resume:** Once the host is finished processing the I/O, it tells the MCU to wake up and continue execution.
+- **How it works on your Nucleo:**
+    1. You call `printf("Hello");` in your code.
+    2. The compiler translates this into a special software interrupt (a breakpoint).
+    3. When the STM32F103 reaches this instruction, the CPU core physically halts execution.
+    4. The ST-LINK debugger (the top half of your Nucleo board) notices the CPU has halted.
+    5. The ST-LINK reads the word "Hello" directly out of the STM32's RAM.
+    6. The ST-LINK sends that word over the mini-USB cable to PlatformIO.
+    7. The ST-LINK tells the CPU to un-pause and keep running.
 
-#### Why Use It? (The Benefits)
-- **Zero Hardware Setup:** No extra pins, no USB-to-TTL dongles, and no baud rate calculations. If your debug cable is plugged in, it works.
-- **File System Access:** This is its "secret weapon." You can write code on your MCU that opens, reads, or writes files directly on your PC's hard drive (e.g., `fopen("data.txt", "w")`).
-- **Early-Stage Debugging:** It works even before you have configured the system clocks or UART peripherals, as it relies on the CPU's internal architecture.
+- **The Pros & Cons:**
+    - **Pros:** Zero hardware setup. You don't have to configure any pins, baud rates, or peripheral clocks.
+    - **Cons:** It is **devastatingly slow**. Because the CPU pauses every single time it prints a character, it destroys the precise timing required by FreeRTOS. If Task 1 is paused while the debugger reads memory, Task 2 misses its deadline.
 
-#### The "Catch": Why RTOS Developers Avoid It
-Semihosting is a **"Stop-the-World"** operation. Because the CPU literally pauses, your **RTOS Ticks will stop**.
-- **Example:** If you have a task that needs to run every 10ms, but a `printf()` via semihosting takes 50ms to process, your entire system timing will break. This is why semihosting is rarely used in production real-time systems.
+### 2. UART (The Professional Way)
+This is the standard way to do it. Instead of pausing the CPU to let the debugger read memory, the STM32 uses a dedicated piece of hardware (the UART peripheral) to shove the text out through physical wires.
+
+- **How it works on your Nucleo F103RB:**
+    1. You configure USART2 on your STM32 (setting the baud rate to 115200, for example).
+    2. You map `printf()` so that every character goes into the USART2 data register.
+    3. The USART2 hardware automatically shifts the bits out over pin **PA2 (TX)**.
+    4. **The Nucleo Magic:** On your specific board, STMicroelectronics permanently wired pin PA2 directly into the ST-LINK chip on the top of the board.
+    5. The ST-LINK chip acts as a "Virtual COM Port" (USB-to-Serial converter) and sends it up the mini-USB cable to your terminal.
+
+- **The Pros & Cons:**
+    - **Pros:** It runs independently of the CPU core. The RTOS scheduler keeps ticking perfectly while the UART hardware handles the data transfer in the background. It is incredibly fast.
+    - **Cons:** You have to write the setup code (enabling the GPIO clock, configuring PA2 as an alternate function, and setting up the USART2 registers).
 
 ---
 
-### 2. Using UART (The Standard Approach)
-UART (Universal Asynchronous Receiver-Transmitter) is the preferred method for logging in an RTOS environment because it is asynchronous and does not halt the CPU.
+## The Heartbeat: System Clock (SYSCLK), HSE, and PLL
 
-#### The Hardware Connection (The Crossover):
-To connect your MCU to a PC via a USB-to-TTL dongle, you must cross the wires:
-- **MCU TX** $\rightarrow$ **Dongle RX** (e.g., PA2 on STM32)
-- **MCU RX** $\leftarrow$ **Dongle TX** (e.g., PA3 on STM32)
-- **GND** $\leftrightarrow$ **GND** (Crucial: Both must share a common "zero" voltage).
+Imagine an orchestra. Without a conductor waving a baton at a specific tempo, the components would play out of sync. The System Clock is the metronome for the entire chip.
 
-#### Why UART is Superior for RTOS:
-- **Non-Blocking:** You can send data to the UART buffer and continue executing code immediately while the hardware handles the transmission in the background.
-- **Real-Time Friendly:** It doesn't stop the system clock or the RTOS scheduler. Your tasks and interrupts continue to run as intended while debug logs are sent to tools like **Tera Term**, **Putty**, or **minicom**.
+### 1. The Motive: Why Speed Matters
+Every time the clock "ticks" (a microscopic electrical pulse), the CPU executes an instruction, memory is read, or data is moved. At **72MHz** (72 million ticks per second), your STM32 can execute roughly 72 million simple instructions every second.
+
+### 2. What is HSE? (High-Speed External)
+Microcontrollers need a physical source to generate that electrical "tick." While they have internal sources (HSI), these fluctuate with temperature. If the chip gets warm, the clock might drift, ruining precise timings like UART or RTOS delays.
+
+- **Your Board:** On the Nucleo-F103RB, the ST-Link debugger generates a perfect **8MHz signal** and feeds it into the **HSE pin** of your STM32 chip. This provides a rock-solid, unchangeable frequency.
+
+### 3. What is the PLL? (Phase-Locked Loop)
+If our external crystal (HSE) only ticks at 8MHz, how do we get the chip to 72MHz? You can't just buy a 72MHz crystal easily—they are fragile and expensive. This is where the **PLL** comes in.
+
+- **The Electronic Multiplier:** The PLL is a multiplier circuit inside the STM32. You feed the stable 8MHz wave from the HSE into the PLL and tell it: "Multiply this by 9."
+- **The Math:** `8 MHz (HSE) x 9 (PLL Multiplier) = 72 MHz (SYSCLK)`.
+
+This is exactly what the `SystemClock_Config()` function in our code handles, ensuring the chip runs at its maximum advertised speed for peak RTOS performance.
 
 ---
 
