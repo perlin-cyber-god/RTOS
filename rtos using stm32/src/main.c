@@ -38,13 +38,11 @@ void GPIO_Init(void) {
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
+// THE INSTRUCTOR'S GOAL
 void vTask1_Handler(void *params) {
-    (void)params;
-    
     while(1) {
-        /* Toggle LED on PA5 */
-        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-        vTaskDelay(pdMS_TO_TICKS(500));
+        printf("Hello World from Task-1\r\n"); // Printing to UART console
+        vTaskDelay(pdMS_TO_TICKS(1000));       // Same delay for both tasks
     }
 }
 
