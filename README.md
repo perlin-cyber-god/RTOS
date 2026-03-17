@@ -673,3 +673,82 @@ Initially, the LED blinked every ~4.5 seconds instead of 0.5 seconds.
 - **Cause:** The RTOS kernel calculated its 1ms "Tick" based on an expected **72MHz** clock (`configCPU_CLOCK_HZ`). However, the hardware was actually running on its internal **8MHz** HSI oscillator.
 - **Math:** $\frac{72MHz}{8MHz} = 9$. Thus, every requested delay was 9x slower than intended.
 - **Fix:** We implemented `SystemClock_Config()` to explicitly engage the PLL and set the CPU to 72MHz, restoring microsecond-level precision.
+
+1. What is "Flashing"? (And why it’s not like a Pi)
+  On a Raspberry Pi 5, you have an SD card or an SSD. When you want to run a program, the
+  Linux operating system "loads" that program from the SD card into RAM (temporary memory),
+  and then the CPU runs it from there. If you turn off the power, the RAM clears, but the file
+  stays on the SD card.
+
+
+  The STM32 is much simpler. It doesn't have an SD card or a big OS like Linux. Instead, it
+  has Internal Flash Memory.
+   * Flashing is the process of "burning" your code directly into the chip's permanent memory.
+   * Unlike RAM, Flash doesn't disappear when you unplug the power.
+   * The moment the STM32 gets power, it looks at a specific spot in that Flash memory and
+     starts running whatever is there instantly. There is no "loading" phase.
+
+
+  2. What is a "Debugger" actually?
+  Think of a debugger (like the ST-Link chip on your Nucleo board) as a Security Camera +
+  Remote Control for your chip.
+   * Without a debugger: You'd just upload code and "hope" it works. If it crashes, you have
+     no idea why.
+   * With a debugger: You can "pause" the CPU while it's running, look inside to see what the
+     variables are currently equal to, and even run the code one single line at a time to see
+     exactly where it fails. It is the "bridge" between your computer and the tiny brain of
+     the STM32.
+
+
+  3. What is SWD (Serial Wire Debug)?
+  In the old days, debugging required a "JTAG" connection which used 10+ wires. SWD is a
+  modern, "diet" version of that created by ARM.
+   * It only uses 2 wires (plus ground): SWDIO (Data) and SWCLK (Clock).
+   * It is the "language" the debugger uses to talk to the STM32. It’s like a very fast,
+     private conversation where the debugger says "Hey, stop the CPU!" and the STM32 obeys.
+
+
+  4. What is OpenOCD? (The Translator)
+  Your computer speaks "USB," and the STM32 speaks "SWD." They don't understand each other
+  directly.
+   * OpenOCD (Open On-Chip Debugger) is a piece of software running on your PC.
+   * It acts as a Translator. It takes the commands from your IDE (like VS Code/PlatformIO)
+     and translates them into the specific USB packets that the ST-Link understands, which
+     then gets turned into SWD signals for the chip.
+
+
+  5. What is firmware.elf?
+  When you click "Build," the compiler takes your C code and turns it into machine code (1s
+  and 0s).
+   * The .elf file is like a Grand Blueprint. It contains the actual code, but it also
+     contains "extra info" (metadata) that tells the debugger: "This piece of code belongs to
+     line 45 of main.c" or "This variable is stored at this specific memory address."
+   * The debugger uses the .elf file to show you your C code while the chip is actually just
+     running raw numbers.
+
+  6. The "0.5s and 4.5s" Issue (Clock Confusion)
+  This is the most common "Welcome to Embedded" headache!
+
+
+  The Setup:
+  Your code told FreeRTOS: "I want to blink the LED every 500ms (0.5 seconds)."
+  FreeRTOS looked at its settings and saw a note saying: "The CPU is running at 72MHz (72
+  million beats per second)."
+  So, FreeRTOS calculated: "Okay, to wait 0.5s, I need to count exactly 36 million beats."
+
+  The Problem:
+  However, the chip's "heart" (the clock) was actually beating at its default "safe mode"
+  speed of only 8MHz (8 million beats per second).
+
+
+  The Result:
+  The chip started counting those 36 million beats... but because it was beating 9 times
+  slower than FreeRTOS thought ($72 \div 8 = 9$), it took 9 times longer to reach that number.
+   * $0.5 \text{ seconds} \times 9 = \mathbf{4.5 \text{ seconds}}$.
+
+
+  The Fix:
+  You had to write a piece of code (SystemClock_Config) that basically tells the STM32: "Hey,
+  stop being lazy! Turn on your high-speed oscillators and run at 72MHz like I told you." Once
+  the heart started beating at the speed the software expected, the 0.5s delay became a real
+  0.5s delay.
