@@ -15,7 +15,7 @@
 #define configIDLE_SHOULD_YIELD                 1
 
 // Enable the Timer Service Task
-#define configUSE_TIMERS                    1
+#define configUSE_TIMERS                    0
 
 // Give the Timer Task a priority (usually higher than normal tasks)
 #define configTIMER_TASK_PRIORITY           ( 2 )

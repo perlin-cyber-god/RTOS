@@ -46,9 +46,9 @@ int main(void) {
     /* 6. Create Task 2 (Priority 2) - Same priority to force Round-Robin! */
     xTaskCreate(vTask2_Handler, "Task-2", 256, NULL, 2, NULL);
 
-    /* 7. Create and Start the Timer */
-    TimerHandle_t myTimer = xTimerCreate("Blinker", pdMS_TO_TICKS(500), pdTRUE, 0, myTimerCallback);
-    xTimerStart(myTimer, 0);
+    // /* 7. Create and Start the Timer */
+    // TimerHandle_t myTimer = xTimerCreate("Blinker", pdMS_TO_TICKS(500), pdTRUE, 0, myTimerCallback);
+    // xTimerStart(myTimer, 0);
 
     /* 8. Start the FreeRTOS Scheduler */
     vTaskStartScheduler();
