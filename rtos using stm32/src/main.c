@@ -12,6 +12,11 @@ void USART2_Init(void);
 void vTask1_Handler(void *params);
 void vTask2_Handler(void *params);
 
+void vApplicationIdleHook(void) {
+    // This runs ONLY when Task 1 and Task 2 are in vTaskDelay
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Blink the LED super fast
+}
+
 int main(void) {
     /* 1. Reset of all peripherals, Initializes the Flash interface and the Systick. */
     HAL_Init();
