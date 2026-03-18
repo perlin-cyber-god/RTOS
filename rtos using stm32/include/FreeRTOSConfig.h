@@ -14,6 +14,18 @@
 #define configUSE_16_BIT_TICKS                  0
 #define configIDLE_SHOULD_YIELD                 1
 
+// Enable the Timer Service Task
+#define configUSE_TIMERS                    1
+
+// Give the Timer Task a priority (usually higher than normal tasks)
+#define configTIMER_TASK_PRIORITY           ( 2 )
+
+// The Timer Task needs a "To-Do List" length. How many timers can be queued?
+#define configTIMER_QUEUE_LENGTH            10
+
+// How much memory (RAM) should the Timer Task get?
+#define configTIMER_TASK_STACK_DEPTH        128
+
 // Interrupt priority settings for ARM Cortex-M3
 #define configKERNEL_INTERRUPT_PRIORITY         255
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY    191 // Priority 6 (0xC0 >> 4)
@@ -34,3 +46,4 @@
 #define xPortSysTickHandler SysTick_Handler
 
 #endif /* FREERTOS_CONFIG_H */
+
