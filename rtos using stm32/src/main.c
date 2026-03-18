@@ -17,6 +17,10 @@ void vApplicationIdleHook(void) {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Blink the LED super fast
 }
 
+void myTimerCallback(TimerHandle_t xTimer) {
+    printf("Timer Fired! No task needed.\n");
+}
+
 int main(void) {
     /* 1. Reset of all peripherals, Initializes the Flash interface and the Systick. */
     HAL_Init();
