@@ -19,8 +19,6 @@ int main(void) {
     /* 2. Configure the system clock to 72 MHz */
     SystemClock_Config();
 
-    SEGGER_SYSVIEW_Conf();
-
     /* 3. Initialize the UART for printing (Case 2) */
     USART2_Init();
 
