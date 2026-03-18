@@ -62,14 +62,18 @@ int main(void) {
 /* --- Task 1 --- */
 void vTask1_Handler(void *params) {
     (void)params;
-    
     while(1) {
+        // Turn D2 ON the microsecond Task 1 takes the CPU
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET); 
+        
         printf("Hello World from Task-1\r\n");
-        // Block for 1 second (1000 ticks) so Task 2 can have a turn
+        
+        // Turn D2 OFF the microsecond before going to sleep
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET); 
+        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
 /* --- Task 2 --- */
 void vTask2_Handler(void *params) {
     (void)params;
@@ -92,11 +96,10 @@ int _write(int file, char *ptr, int len) {
 // <--- ADDED GPIO INIT FUNCTION --->
 void GPIO_Init(void) {
     __HAL_RCC_GPIOA_CLK_ENABLE();
-
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
-    // Configure PA5 (Nucleo Green LED) as Push-Pull Output
-    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    // Configure PA5 (LED) and PA10 (Task 1 Profiler)
+    GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_10; 
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; 
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
