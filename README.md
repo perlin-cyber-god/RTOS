@@ -233,11 +233,35 @@ One of the most important safety features in an RTOS is that the **Scheduler (Sy
 
 **Why?** Because hardware always outranks software! The operating system should never delay a real-world hardware emergency. If your board receives a critical byte of data over UART or an ADC finishes a critical reading, those hardware interrupts will instantly preempt the scheduler, handle the emergency, and then return control to the OS.
 
-### 5. Troubleshooting: Why `vTaskStartScheduler()` Fails
-If your code reaches the infinite `for(;;)` loop after the scheduler call, it is almost always due to **Heap Exhaustion**. 
-- `xTaskCreate` allocates the **Task Control Block (TCB)** and the **Task Stack** from the heap.
-- If the heap is full, the task is never created.
-- If no tasks exist, the scheduler has nothing to run and returns control to `main()`.
+### 5. The Silent Killer: Why `vTaskStartScheduler()` Fails
+
+There is only one single, catastrophic reason why `vTaskStartScheduler()` will ever give up, return, and trap your code in that infinite `for(;;);` black hole: **It runs out of money (RAM).**
+
+Specifically, it runs out of the **FreeRTOS Heap Memory**. Here is exactly how this silent killer happens:
+
+#### The Hidden Cost of the "Janitor"
+As we’ve seen, `vTaskStartScheduler()` has a hidden job: before it opens the office, it must "hire" the **Idle Task** (and the **Timer Task**, if enabled). But hiring tasks isn't free. Every single task requires RAM for two things:
+1.  **The TCB (Task Control Block):** The ID card that holds the task's priority, name, and status.
+2.  **The Stack:** The physical workspace (memory) the task needs to do its math and store its local variables.
+
+#### The 10KB Budget Constraint
+The FreeRTOS Manager doesn't get to use all the RAM on your STM32 chip. It only gets the specific allowance you wrote in your `FreeRTOSConfig.h` file. In many default setups, this budget is exactly **10 Kilobytes**:
+```c
+#define configTOTAL_HEAP_SIZE ( 10 * 1024 )
+```
+
+#### The Crash Scenario
+Imagine you get a little carried away in `main()`:
+- You create **Task 1** and give it a massive **4KB stack**. (6KB left)
+- You create **Task 2** and give it another massive **4KB stack**. (2KB left)
+- You create a big **Message Queue** to send data between them, which eats up another **2KB**. (**0KB left**)
+
+Then, you confidently call `vTaskStartScheduler()`. The Manager wakes up, looks at its bank account, and realizes it has **0 bytes left**. It physically cannot allocate the memory required to create the mandatory **Idle Task**.
+
+Because the OS mathematically cannot run without an Idle Task, the Manager throws its hands in the air, aborts the entire boot-up sequence, and returns control back to `main()`. Your code instantly falls into the `for(;;);` loop, and the board sits there frozen like a brick.
+
+#### How to Protect Yourself
+When you are building a complex drone or cybersecurity tool, you will be creating lots of tasks. If your board suddenly freezes on boot, 99% of the time, you just need to open `FreeRTOSConfig.h` and increase **`configTOTAL_HEAP_SIZE`**.
 
 ---
 
