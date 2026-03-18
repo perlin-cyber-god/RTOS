@@ -816,3 +816,111 @@ Initially, the LED blinked every ~4.5 seconds instead of 0.5 seconds.
   stop being lazy! Turn on your high-speed oscillators and run at 72MHz like I told you." Once
   the heart started beating at the speed the software expected, the 0.5s delay became a real
   0.5s delay.
+
+---
+
+## Idle Task and Time Service Task
+
+Perfect. Let’s shift from the "wiring and drivers" nightmare to the actual "brain" of FreeRTOS. Switching to A Plague Tale is a great move—Hugo and Amicia definitely deal with better scheduling than we just did with those USB drivers!
+
+Think of FreeRTOS as a Manager in a busy office. You've already met the workers (Task 1 and Task 2), but the Manager has two "Secret Assistants" that keep the office from collapsing.
+
+### 1. The Idle Task (The "Janitor")
+
+**In Layman's Terms:**
+Imagine a shop where customers (Tasks) come and go. When there are no customers, the staff doesn't just vanish into thin air. Someone has to stay behind to sweep the floors, lock the back door, and wait for the next customer.
+The Idle Task is the Janitor. It only works when everyone else is "Sleeping" or "Waiting."
+
+**Going Deeper:**
+The Idle Task is automatically created by the kernel when you call `vTaskStartScheduler()`. It has the lowest possible priority (0).
+- **Memory Cleanup:** If you delete a task, the Idle Task is the one that actually goes and frees up that "RAM" (stack/TCB) so it can be used again.
+- **Power Saving:** This is where the magic happens for battery life. You can tell the Idle Task to put the CPU into "Sleep Mode" until the next interrupt happens.
+
+**Practical Experiment:**
+You can actually "catch" the Idle Task working! FreeRTOS has an Idle Hook function. If you enable it, the CPU will jump into this function every time it has nothing else to do.
+
+Try this in your code:
+1. Set `configUSE_IDLE_HOOK` to 1 in `FreeRTOSConfig.h`.
+2. Add this to your `main.c`:
+
+```c
+void vApplicationIdleHook(void) {
+    // This runs ONLY when Task 1 and Task 2 are in vTaskDelay
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Blink the LED super fast
+}
+```
+
+If you look at your logic analyzer now, you’ll see the LED toggling like crazy during those 1000ms gaps between your "Hello World" prints!
+
+### 2. The Timer Service Task (The "Alarm Clock")
+
+**In Layman's Terms:**
+Imagine you tell a friend, "Hey, remind me to check the oven in 10 minutes." You don't want to sit there staring at your watch for 10 minutes—you want to go watch TV.
+The Timer Service Task is that friend. It sits in the corner, watches the clock, and "pokes" you when it’s time to do something.
+
+**Going Deeper:**
+Also known as the Daemon Task. It handles "Software Timers."
+- It doesn't run based on code logic; it runs based on the System Tick.
+- When you create a software timer (e.g., `xTimerCreate`), you aren't creating a new task. You are just adding a note to the Timer Service Task’s "To-Do List."
+
+**Practical Experiment:**
+Software timers are better than tasks for simple, repetitive things (like blinking an LED or checking a sensor) because they save RAM.
+
+Try replacing one of your tasks with a Timer:
+```c
+// 1. Define the callback
+void myTimerCallback(TimerHandle_t xTimer) {
+    printf("Timer Fired! No task needed.\n");
+}
+
+// 2. In main(), before starting scheduler:
+TimerHandle_t myTimer = xTimerCreate("Blinker", pdMS_TO_TICKS(500), pdTRUE, 0, myTimerCallback);
+xTimerStart(myTimer, 0);
+```
+
+### The "Practical" Difference
+
+| Feature | Idle Task | Timer Task |
+| :--- | :--- | :--- |
+| **When does it run?** | When NOTHING else can run. | When a specific TIME has passed. |
+| **Priority** | Always 0 (Lowest). | Configurable (usually high). |
+| **Who creates it?** | The Kernel (Automatic). | The Kernel (if `configUSE_TIMERS` is 1). |
+| **Main Job** | Cleanup & Power Saving. | Executing "Delayed" functions. |
+
+---
+
+## Advanced Profiling: Visualizing the "Heartbeat"
+
+We have recently "powered up" the STM32 to go beyond simple text logs. By using a Logic Analyzer and custom GPIO triggers, we can now see the exact microsecond when tasks hand over the CPU to each other.
+
+### 1. Task Profiling with GPIO (The "D2" Trigger)
+In `main.c`, we've added a **Profiler Pin** on **PA10**. This acts as a physical "flag" for Task 1:
+- **Rising Edge:** Task 1 takes control of the CPU.
+- **Falling Edge:** Task 1 finishes its work (printing "Hello World") and enters the `vTaskDelay` state.
+
+```c
+void vTask1_Handler(void *params) {
+    while(1) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET); // START PROFILING
+        printf("Hello World from Task-1\r\n");
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET); // STOP PROFILING
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+```
+
+### 2. Measuring the Idle Gap (The "974ms to 976ms" Window)
+By enabling the **Idle Hook** (`configUSE_IDLE_HOOK 1`), we can observe exactly how much "free time" the CPU has between tasks. We've configured the Idle Hook to toggle the Nucleo's Green LED (**PA5**) as fast as possible.
+
+**Observed Timing on Logic Analyzer:**
+- **Task Execution Time:** When Task 1 and Task 2 are printing to UART, they hog the CPU for roughly **2-4ms**.
+- **The Idle Recovery:** You observed the Idle Task "opening" (starting its toggle) at **974ms** and "closing" (preempted by the next tick) at **976ms**. 
+- **The Verdict:** This confirms that out of every 1000ms cycle, the CPU is effectively "Idle" for ~97.5% of the time, proving that FreeRTOS is successfully managing the power and processing efficiency of the chip.
+
+### 3. Summary of Profiling Pins
+| Hardware Pin | Function | Logic High | Logic Low |
+| :--- | :--- | :--- | :--- |
+| **PA10 (Profiler)** | Task 1 State | Task 1 is **Running** | Task 1 is **Blocked/Delayed** |
+| **PA5 (Green LED)** | CPU Idle State | CPU is **Free** (Idle Hook) | CPU is **Busy** (Task 1 or 2) |
+
+This setup allows us to "see" the RTOS scheduler working in real-time, providing empirical proof of the timing math we discussed earlier!
