@@ -73,18 +73,36 @@ The RPi 5 isn't a microcontroller; it's a **Full Computer (SBC)**. It runs Linux
 
 ---
 
-## Scheduling Mechanisms: Preemption and Time Slicing
+## FreeRTOS Scheduling: The Core Engine
 
-The RTOS scheduler determines which task should be in the **Running** state based on their assigned priorities and the current scheduling policy.
+The **Scheduler** is a piece of kernel code responsible for deciding which task should be executing at any particular time on the CPU. It is the "brain" of FreeRTOS.
 
-### 1. Preemptive Scheduling (Fixed Priority)
-In a preemptive system, the scheduler ensures that the **highest priority task** that is in the **Ready** state is always the one currently **Running**.
+The **Scheduling Policy** is the algorithm used by the scheduler to decide which task to execute at any point in time. In FreeRTOS, this policy is primarily configured via `configUSE_PREEMPTION` in the `FreeRTOSConfig.h` file.
+
+### 1. Priority-Based Preemptive Scheduling
+**Configuration:** `configUSE_PREEMPTION = 1`
+
+This is the industry standard for real-time systems. The scheduler ensures that the **highest priority task** that is in the **Ready** state is always the one currently **Running**.
 
 - **The Preemption Event:** If Task A (Priority 2) is running and Task B (Priority 3) suddenly becomes **Ready** (e.g., a timer expires or an interrupt signals a semaphore), the scheduler immediately interrupts Task A.
 - **Context Switch:** The RTOS saves Task A's registers to its stack and loads Task B's context. Task B begins running instantly.
 - **Determinism:** This ensures that high-priority, time-critical tasks are never delayed by lower-priority application logic.
 
-### 2. Handling Equal Priority Tasks (Time Slicing)
+### 2. Co-operative Scheduling
+**Configuration:** `configUSE_PREEMPTION = 0`
+
+This is a more "polite" but less deterministic approach.
+- **The Process:** A task continues to run until it **explicitly** decides to give up the CPU (by calling `vTaskDelay` or `taskYIELD`).
+- **No Preemption:** Even if a high-priority task becomes ready, it will **not** interrupt the current task until that task finishes its work or voluntarily yields.
+- **The Danger:** If a task gets stuck in an infinite loop without yielding, the entire system (including all other tasks) will freeze forever.
+
+---
+
+## Scheduling Mechanisms: Preemption and Time Slicing
+
+The RTOS scheduler determines which task should be in the **Running** state based on their assigned priorities and the current scheduling policy.
+
+### 1. Handling Equal Priority Tasks (Time Slicing)
 When multiple tasks share the **same priority** and are all in the **Ready** state, the RTOS typically employs **Round Robin Time Slicing**.
 
 - **The Tick Interrupt:** The RTOS kernel uses a hardware timer to generate a periodic "Tick Interrupt" (e.g., every 1ms).
@@ -138,40 +156,9 @@ When you switch from Task A to Task B, you have to save the "State" (CPU registe
 
 ---
 
-## Scheduling Policies: The Scheduler's Decision Algorithm
+### Configuring the Scheduler in PlatformIO (`FreeRTOSConfig.h`)
 
-The **Scheduling Policy** is the specific algorithm the Scheduler uses to decide which task should be in the **Running** state at any point in time. While there are several options, most real-time systems (like FreeRTOS) default to a specific type for maximum reliability.
-
-### 1. Simple Pre-emptive Scheduling (Round Robin)
-In this policy, all tasks are treated equally. There are no priorities.
-- **The Process:** Each task is given a fixed "time slice" (a tick). When the tick interrupt occurs, the Scheduler simply moves to the next task in the list.
-- **Use Case:** Systems where no task is more important than another. It ensures "fairness" but provides zero real-time guarantees for critical events.
-
-### 2. Priority-Based Pre-emptive Scheduling (The RTOS Standard)
-This is the **default** for FreeRTOS and almost all professional RTOSs.
-- **The Process:** Every task is assigned a priority number. The Scheduler **must** always run the "Ready" task with the highest priority.
-- **Preemption:** If a high-priority task suddenly becomes ready (even in the middle of a low-priority task's time slice), the Scheduler **immediately** stops the low-priority task and switches.
-- **Why it's the King:** This ensures that time-critical tasks (like safety sensors or motor controls) are serviced with microsecond precision, regardless of what else the CPU is doing.
-
-### 3. Co-operative Scheduling
-This is a more "polite" but less deterministic approach.
-- **The Process:** A task continues to run until it **explicitly** decides to give up the CPU (by calling `vTaskDelay` or `taskYIELD`).
-- **No Preemption:** Even if a high-priority task becomes ready, it will **not** interrupt the current task until that task finishes its work or voluntarily yields.
-- **The Danger:** If a task gets stuck in an infinite loop without yielding, the entire system (including all other tasks) will freeze forever.
-
-### Comparison Table
-
-| Policy | Decision Logic | Preemption? | Best For... |
-| :--- | :--- | :--- | :--- |
-| **Round Robin** | Fairness (Equal slices) | Yes (on Tick) | Simple, non-critical multitasking. |
-| **Priority-Based** | Importance (Highest number) | **Yes (Immediate)** | **Real-time systems / FreeRTOS default.** |
-| **Co-operative** | Manual (Wait for Yield) | **No** | Very simple systems with trusted tasks. |
-
----
-
-### Configuring the Scheduler in `FreeRTOSConfig.h`
-
-In a PlatformIO or any FreeRTOS project, you select the scheduling policy by modifying specific **#define** macros in the `FreeRTOSConfig.h` file (usually found in the `include` folder).
+In a PlatformIO project, you select the scheduling policy by modifying specific **#define** macros in the `FreeRTOSConfig.h` file (found in the `include` folder).
 
 #### 1. To enable Priority-Based Pre-emptive Scheduling (Standard):
 ```c
@@ -189,12 +176,6 @@ In a PlatformIO or any FreeRTOS project, you select the scheduling policy by mod
 #define configUSE_PREEMPTION                    0
 ```
 *When this is 0, the scheduler will **never** interrupt a task. It will only switch when the current task calls a function like `taskYIELD()` or `vTaskDelay()`.*
-
-#### 4. To disable Round Robin (Equal Priority):
-```c
-#define configUSE_TIME_SLICING                  0
-```
-*With this setting, if two tasks have the same priority, the first one to start running will stay running until it blocks or is preempted by a **higher** priority task. They won't "share" time.*
 
 ---
 
@@ -673,7 +654,7 @@ When our FreeRTOS tasks call `printf("H")`, the USART2 hardware performs a **Par
 #### 3. Why CN3 RX? (The "Ear" on the Wire)
 This is a common point of confusion:
 - The **STM32** is the Transmitter (TX). It "talks" on its TX pin (**PA2**).
-- The **ST-LINK** chip (the debugger) is the Receiver (RX). It "listens" on its RX pin.
+- The **ST-LINK** chip (the debugger) is the Receiver (RX). It "listen" on its RX pin.
 Because we want to "hear" what the STM32 is saying using the logic analyzer, we must place our probe on the wire the ST-LINK is listening to. That is why we tap the **RX** pin on the **CN3** jumper.
 
 #### 4. UART in the FreeRTOS Lifecycle
@@ -886,6 +867,43 @@ xTimerStart(myTimer, 0);
 | **Priority** | Always 0 (Lowest). | Configurable (usually high). |
 | **Who creates it?** | The Kernel (Automatic). | The Kernel (if `configUSE_TIMERS` is 1). |
 | **Main Job** | Cleanup & Power Saving. | Executing "Delayed" functions. |
+
+---
+
+## FreeRTOS Scheduling: The Core Engine
+
+The **Scheduler** is a piece of kernel code responsible for deciding which task should be executing at any particular time on the CPU. It is the "brain" of FreeRTOS.
+
+The **Scheduling Policy** is the algorithm used by the scheduler to decide which task to execute at any point in time. In FreeRTOS, this policy is primarily configured via `configUSE_PREEMPTION` in the `FreeRTOSConfig.h` file.
+
+### 1. Priority-Based Pre-emptive Scheduling
+**Configuration:** `configUSE_PREEMPTION = 1`
+
+This is the industry standard for real-time systems. The scheduler ensures that the **highest priority task** that is in the **Ready** state is always the one currently **Running**.
+
+- **The Preemption Event:** If Task A (Priority 2) is running and Task B (Priority 3) suddenly becomes **Ready**, the scheduler immediately interrupts Task A.
+- **Context Switch:** The RTOS saves Task A's registers and loads Task B's context.
+- **Determinism:** High-priority tasks are never delayed by lower-priority application logic.
+
+### 2. Co-operative Scheduling
+**Configuration:** `configUSE_PREEMPTION = 0`
+
+This is a more "polite" but less deterministic approach.
+- **The Process:** A task continues to run until it **explicitly** decides to give up the CPU (by calling `vTaskDelay` or `taskYIELD`).
+- **No Preemption:** Even if a high-priority task becomes ready, it will **not** interrupt the current task until that task voluntarily yields.
+- **The Danger:** If a task gets stuck in an infinite loop, the entire system freezes.
+
+### Configuring the Scheduler in PlatformIO (`FreeRTOSConfig.h`)
+
+In your PlatformIO project, you can easily toggle between these policies by modifying the `include/FreeRTOSConfig.h` file:
+
+```c
+// For Priority-Based Pre-emptive Scheduling:
+#define configUSE_PREEMPTION                    1
+
+// For Co-operative Scheduling:
+#define configUSE_PREEMPTION                    0
+```
 
 ---
 
