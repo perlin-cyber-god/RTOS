@@ -2,86 +2,86 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <stdio.h>
-#include "timers.h"  
 
-/* Global Handlers */
+/* --- Global Variables --- */
 UART_HandleTypeDef huart2;
+volatile uint8_t button_flag = 0; // <--- Our shared RTOS flag!
 
-/* Function Prototypes */
+/* --- Function Prototypes --- */
 void SystemClock_Config(void);
-void GPIO_Init(void);           // <--- Added Prototype for LED
+void GPIO_Init(void);           
 void USART2_Init(void);
-void vTask1_Handler(void *params);
-void vTask2_Handler(void *params);
+void button_task(void *params); // <--- New Prototype
+void led_task(void *params);    // <--- New Prototype
 
 void vApplicationIdleHook(void) {
-    // This runs ONLY when Task 1 and Task 2 are in vTaskDelay
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Blink the LED super fast
+    // We removed the LED toggle here so it doesn't fight our led_task!
 }
 
 void vApplicationTickHook(void) {
-    // We promised the kernel this would exist, but we don't need it to do anything right now.
-}
-
-void myTimerCallback(TimerHandle_t xTimer) {
-    printf("Timer Fired! No task needed.\n");
+    // Still required by FreeRTOSConfig.h, but kept empty.
 }
 
 int main(void) {
-    /* 1. Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    /* 1. Reset all peripherals, initialize Flash interface and Systick. */
     HAL_Init();
 
-    /* 2. Configure the system clock to 72 MHz */
+    /* 2. Configure system clock to 72 MHz */
     SystemClock_Config();
 
-    /* 3. Initialize the GPIO for the LED */
-    GPIO_Init();                // <--- Added Call
+    /* 3. Initialize GPIO (LED and Button) */
+    GPIO_Init();                
 
-    /* 4. Initialize the UART for printing */
+    /* 4. Initialize UART for printing */
     USART2_Init();
+    printf("\r\n--- RTOS Button & LED Exercise Started ---\r\n");
 
-    /* 5. Create Task 1 (Priority 2) */
-    xTaskCreate(vTask1_Handler, "Task-1", 256, NULL, 2, NULL);
+    /* 5. Create Button Task (Priority 2) */
+    xTaskCreate(button_task, "Button-Task", 256, NULL, 2, NULL);
 
-    /* 6. Create Task 2 (Priority 2) - Same priority to force Round-Robin! */
-    xTaskCreate(vTask2_Handler, "Task-2", 256, NULL, 2, NULL);
+    /* 6. Create LED Task (Priority 2) */
+    xTaskCreate(led_task, "LED-Task", 256, NULL, 2, NULL);
 
-    // /* 7. Create and Start the Timer */
-    // TimerHandle_t myTimer = xTimerCreate("Blinker", pdMS_TO_TICKS(500), pdTRUE, 0, myTimerCallback);
-    // xTimerStart(myTimer, 0);
-
-    /* 8. Start the FreeRTOS Scheduler */
+    /* 7. Start the FreeRTOS Scheduler */
     vTaskStartScheduler();
 
-    /* We should never reach here as control is now taken by the scheduler */
+    /* We should never reach here */
     for(;;);
     
     return 0;
 }
 
-/* --- Task 1 --- */
-void vTask1_Handler(void *params) {
-    (void)params;
-    while(1) {
-        // Turn D2 ON the microsecond Task 1 takes the CPU
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET); 
-        
-        printf("Hello World from Task-1\r\n");
-        
-        // Turn D2 OFF the microsecond before going to sleep
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET); 
-        
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-/* --- Task 2 --- */
-void vTask2_Handler(void *params) {
+/* --- Task 1: Button Poller --- */
+void button_task(void *params) {
     (void)params;
     
     while(1) {
-        printf("Hello World from Task-2\r\n");
-        // Block for 1 second
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // Read PC13. Nucleo buttons read 0 (RESET) when pressed!
+        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
+            button_flag = 1; // SET the flag
+        } else {
+            button_flag = 0; // CLEAR the flag
+        }
+        
+        // Block for 10ms so we don't hog the CPU
+        vTaskDelay(pdMS_TO_TICKS(10)); 
+    }
+}
+
+/* --- Task 2: LED Controller --- */
+void led_task(void *params) {
+    (void)params;
+    
+    while(1) {
+        // Check the shared flag updated by the button task
+        if (button_flag == 1) {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // Turn LED ON
+        } else {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Turn LED OFF
+        }
+        
+        // Block for 10ms
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -92,25 +92,31 @@ int _write(int file, char *ptr, int len) {
 }
 
 /* --- Hardware Initialization --- */
-
-// <--- ADDED GPIO INIT FUNCTION --->
 void GPIO_Init(void) {
+    // Turn on clocks for Port A (LED) and Port C (Button)
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE(); // <--- ADDED Port C Clock
+
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
-    // Configure PA5 (LED) and PA10 (Task 1 Profiler)
-    GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_10; 
+    // Configure PA5 (Nucleo Green LED) as Push-Pull Output
+    GPIO_InitStruct.Pin = GPIO_PIN_5; 
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; 
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // Configure PC13 (Blue User Button) as Input
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL; // Nucleo board has a physical external pull-up
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 
 void USART2_Init(void) {
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_USART2_CLK_ENABLE();
 
-    // PA2 is TX (Transmit), PA3 is RX (Receive)
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = GPIO_PIN_2;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; 
@@ -137,7 +143,6 @@ void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    // 8MHz HSE to 72MHz SYSCLK using PLL x9
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
