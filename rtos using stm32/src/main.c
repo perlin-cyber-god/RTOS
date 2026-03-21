@@ -1,116 +1,135 @@
+/* ====================================================================
+ * ZONE 1: INCLUDES
+ * ==================================================================== */
 #include "stm32f1xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <stdio.h>
 
-/* --- Global Variables --- */
+/* ====================================================================
+ * ZONE 2: GLOBAL VARIABLES & PROTOTYPES
+ * ==================================================================== */
 UART_HandleTypeDef huart2;
-volatile uint8_t button_flag = 0; // <--- Our shared RTOS flag!
 
-/* --- Function Prototypes --- */
+// Hardware Setup Prototypes
 void SystemClock_Config(void);
 void GPIO_Init(void);           
 void USART2_Init(void);
-void button_task(void *params); // <--- New Prototype
-void led_task(void *params);    // <--- New Prototype
 
+// Task Prototypes (The Instruction Manuals)
+void task_A(void *params);
+void task_B(void *params);
+void task_C(void *params);
+
+/* ====================================================================
+ * ZONE 3: THE FREE-RTOS HOOKS & HANDLERS (The Traffic Cops)
+ * ==================================================================== */
+extern void xPortSysTickHandler(void);
+
+// Our custom SysTick handler that prevents the 1ms startup crash
+void SysTick_Handler(void) {
+    HAL_IncTick(); 
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
+        xPortSysTickHandler();
+    }
+}
+
+// The Janitor: Runs ONLY when all other tasks are asleep (Priority 0)
 void vApplicationIdleHook(void) {
-    // We removed the LED toggle here so it doesn't fight our led_task!
+    // Pulse PA8 HIGH then LOW instantly. 
+    // This creates a dense "comb" on the logic analyzer to prove the CPU is idling!
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
 }
 
+// Required by FreeRTOSConfig.h, but we leave it empty
 void vApplicationTickHook(void) {
-    // Still required by FreeRTOSConfig.h, but kept empty.
 }
 
+/* ====================================================================
+ * ZONE 4: THE MAIN FUNCTION (The Manager's Office)
+ * ==================================================================== */
 int main(void) {
-    /* 1. Reset all peripherals, initialize Flash interface and Systick. */
+    /* --- 1. Boot up the hardware --- */
     HAL_Init();
-
-    /* 2. Configure system clock to 72 MHz */
     SystemClock_Config();
-
-    /* 3. Initialize GPIO (LED and Button) */
     GPIO_Init();                
-
-    /* 4. Initialize UART for printing */
     USART2_Init();
-    printf("\r\n--- RTOS Button & LED Exercise Started ---\r\n");
+    
+    printf("\r\n--- Logic Analyzer Profiling Test Starting ---\r\n");
 
-    /* 5. Create Button Task (Priority 2) */
-    xTaskCreate(button_task, "Button-Task", 256, NULL, 2, NULL);
+    /* --- 2. Hire the Workers --- */
+    // All workers get the exact same Priority (2)
+    xTaskCreate(task_A, "TaskA", 128, NULL, 2, NULL);
+    xTaskCreate(task_B, "TaskB", 128, NULL, 2, NULL);
+    xTaskCreate(task_C, "TaskC", 128, NULL, 2, NULL);
 
-    /* 6. Create LED Task (Priority 2) */
-    xTaskCreate(led_task, "LED-Task", 256, NULL, 2, NULL);
-
-    /* 7. Start the FreeRTOS Scheduler */
+    /* --- 3. Lock the doors and start the OS --- */
     vTaskStartScheduler();
 
-    /* We should never reach here */
-    for(;;);
+    /* --- 4. The Black Hole --- */
+    while(1);
     
     return 0;
 }
 
-/* --- Task 1: Button Poller --- */
-void button_task(void *params) {
-    (void)params;
-    
+/* ====================================================================
+ * ZONE 5: THE TASK FUNCTIONS (The Workers)
+ * ==================================================================== */
+
+void task_A(void *params) {
     while(1) {
-        // Read PC13. Nucleo buttons read 0 (RESET) when pressed!
-        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
-            button_flag = 1; // SET the flag
-        } else {
-            button_flag = 0; // CLEAR the flag
-        }
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // D0 High
+        printf("Task A is working...\r\n");
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // D0 Low
         
-        // Block for 10ms so we don't hog the CPU
-        vTaskDelay(pdMS_TO_TICKS(10)); 
+        vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
     }
 }
 
-/* --- Task 2: LED Controller --- */
-void led_task(void *params) {
-    (void)params;
-    
+void task_B(void *params) {
     while(1) {
-        // Check the shared flag updated by the button task
-        if (button_flag == 1) {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // Turn LED ON
-        } else {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Turn LED OFF
-        }
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);   // D1 High
+        printf("Task B is working...\r\n");
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET); // D1 Low
         
-        // Block for 10ms
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
     }
 }
 
-/* --- Retarget printf to UART --- */
+void task_C(void *params) {
+    while(1) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);   // D2 High
+        printf("Task C is working...\r\n");
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET); // D2 Low
+        
+        vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
+    }
+}
+
+/* ====================================================================
+ * ZONE 6: HELPER FUNCTIONS
+ * ==================================================================== */
+// This links 'printf' directly to our UART cable
 int _write(int file, char *ptr, int len) {
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     return len;
 }
 
-/* --- Hardware Initialization --- */
-void GPIO_Init(void) {
-    // Turn on clocks for Port A (LED) and Port C (Button)
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE(); // <--- ADDED Port C Clock
+/* ====================================================================
+ * ZONE 7: HARDWARE INITIALIZATION (The Boring Silicon Stuff)
+ * ==================================================================== */
 
+void GPIO_Init(void) {
+    __HAL_RCC_GPIOA_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
-    // Configure PA5 (Nucleo Green LED) as Push-Pull Output
-    GPIO_InitStruct.Pin = GPIO_PIN_5; 
+    // Configure PA5 (D0), PA6 (D1), PA7 (D2), and PA8 (D3)
+    GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8; 
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; 
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    // Configure PC13 (Blue User Button) as Input
-    GPIO_InitStruct.Pin = GPIO_PIN_13;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // Nucleo board has a physical external pull-up
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 
 void USART2_Init(void) {
@@ -143,13 +162,13 @@ void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-    RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+    // Using the internal HSI clock (The fix we applied earlier!)
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16; 
     HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
     RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
