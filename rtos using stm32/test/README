@@ -1,0 +1,58 @@
+
+This directory is intended for PlatformIO Test Runner and project tests.
+
+Unit Testing is a software testing method by which individual units of
+source code, sets of one or more MCU program modules together with associated
+control data, usage procedures, and operating procedures, are tested to
+determine whether they are fit for use. Unit testing finds problems early
+in the development cycle.
+
+More information about PlatformIO Unit Testing:
+- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+## Debugging Lesson: Resource Contention in FreeRTOS
+
+This is an absolutely breathtaking capture from our logic analyzer trace. You didn't just capture tasks running—you captured a live FreeRTOS "car crash," and it perfectly explains why Real-Time Operating Systems exist.
+
+Look closely at the trace (similar to what you'd see in Image 4 of a typical debugging session). It tells a dramatic story about Resource Contention, based on the code in [src/main.c](src/main.c).
+
+Your instinct might be that Task A, B, and C (defined in `task_A`, `task_B`, and `task_C` functions) would run perfectly in sequence. But look at what actually happened:
+
+- D0 (PA5, Task A) goes HIGH and stays high for a long time.
+- Right in the middle of Task A, D1 (PA6, Task B) and D2 (PA7, Task C) fire off tiny, microscopic spikes, and disappear.
+- Then D3 (PA8, The Idle Task) takes over.
+
+Why did B and C fail to print? Let's break down the exact microsecond-by-microsecond timeline of this crime scene, referencing our [main.c](src/main.c) implementation.
+
+### The Murder Mystery Timeline
+
+1. **Task A Starts (D0 goes HIGH)**  
+   Task A wakes up, turns on PA5 (D0), and calls `printf("Task A is working...\r\n");`. Because we are using the STM32 HAL, `printf` tells the hardware UART (USART2) to start sending letters. At 115200 baud, sending "Task A is working...\r\n" takes almost 2 full milliseconds of the CPU waiting around, as implemented in the `_write` function that calls `HAL_UART_Transmit`.
+
+2. **The 1ms Metronome Interruption**  
+   Look at the gap between D0 going high and D1 spiking. It is exactly 1 millisecond!  
+   While Task A is halfway through printing its sentence, the FreeRTOS 1ms SysTick hardware alarm rings (handled in `SysTick_Handler`).  
+   The FreeRTOS Manager wakes up and says, "Task A, you've been hogging the CPU for 1ms. Time's up! Task B, your turn!" (This is called Round-Robin Scheduling, since all tasks have priority 2).
+
+3. **Task B Hits a Brick Wall (D1 Spike)**  
+   Task A is frozen in the middle of printing.  
+   Task B wakes up, turns PA6 (D1) HIGH, and calls `printf("Task B is working...\r\n");`.  
+   But the STM32 HAL has a built-in safety lock. When Task B tries to use the UART, the HAL looks at it and says, "Sorry, Task A is currently using the UART. HAL_BUSY!" Because it gets rejected instantly, Task B's `printf` takes 0 milliseconds. Task B immediately turns D1 LOW and goes to sleep (via `vTaskDelay(pdMS_TO_TICKS(2000))`). That is why D1 is just a tiny blip!
+
+4. **Task C Hits the Same Wall (D2 Spike)**  
+   The OS instantly moves to Task C. Task C turns PA7 (D2) HIGH, asks for the UART, gets rejected with HAL_BUSY, turns D2 LOW, and goes to sleep. Another tiny blip!
+
+5. **Task A Finishes the Job**  
+   Tasks B and C have put themselves to sleep for 2000ms. The Manager looks around and says, "Well, Task A, I guess you can have the CPU back."  
+   Task A unfreezes, finishes printing the rest of its letters (look at the UART trace matching D0 going LOW), puts its pencil down, and goes to sleep.
+
+6. **The Janitor Arrives (D3 Comb)**  
+   Now Tasks A, B, and C are all asleep. The OS hands the CPU to the Idle Task (`vApplicationIdleHook`). PA8 (D3) starts rapidly toggling HIGH and LOW, creating that dense grey "comb" you see across the rest of the screen until the 2000ms alarms go off again.
+
+### The Big Lesson: The "Mutex"
+
+You just proved that when multiple workers share a single piece of hardware (like one UART cable, or one I2C sensor), they will collide and corrupt each other.
+
+In the RTOS world, the solution to this is called a Mutex (Mutual Exclusion). It is literally a digital "Bathroom Key." If Task A has the key, Task B has to stand in the hallway and wait until Task A returns the key before it is allowed to touch the UART.
+
+This trace is a masterpiece of embedded debugging. You can literally see the FreeRTOS scheduler slicing up time, and it demonstrates why synchronization primitives are crucial in concurrent systems.
