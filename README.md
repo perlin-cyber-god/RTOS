@@ -339,6 +339,39 @@ If you tell the RTOS your CPU is at 72 MHz but it's actually running at 8 MHz, e
 
 ---
 
+## Context Switching: The Silicon Magic
+
+### 1. The Hardware Assist (The Automatic Pack-Up)
+
+ARM chips are incredibly smart and designed specifically for Real-Time Operating Systems.
+The very nanosecond the SysTick hardware alarm rings, the silicon chip itself panics and says, "Quick, save the most important stuff before the Manager gets here!"
+
+Without FreeRTOS writing a single line of code, the hardware automatically grabs the most crucial registers:
+- **R0, R1, R2, R3, R12:** The main math scratchpads.
+- **LR (Link Register):** Where the task was supposed to return to.
+- **PC (Program Counter):** The exact line of code the task was currently reading.
+- **xPSR (Status Register):** The current math flags (like if the last calculation resulted in a zero or a negative).
+
+The hardware takes these 8 pieces of data (called the **Stack Frame**) and shoves them into Task 1's personal filing cabinet (its **Private Stack** in RAM).
+
+### 2. Passing the Baton (SysTick to PendSV)
+
+As we saw, the SysTick interrupt does the timekeeping math. If it decides Task 1 is out of time, it "pends" (triggers) the **PendSV** interrupt.
+
+SysTick finishes its job, the hardware tries to go back to normal, but instantly the PendSV interrupt fires. PendSV is the actual "Bouncer" that finishes the context switch.
+
+### 3. The Software Heavy Lifting (The Manual Pack-Up)
+
+When PendSV walks in, it looks at the desk. The hardware automatically saved 8 registers, but there are still a bunch left on the table: **R4 through R11**.
+
+The hardware doesn't save these automatically to save time (in case a context switch wasn't needed). So, the FreeRTOS PendSV handler runs a few lines of highly optimized, bare-metal Assembly language to manually scoop up R4 through R11 and push them into Task 1's filing cabinet (Private Stack) right on top of the stuff the hardware just saved.
+
+### The Result: The Task is "Switched Out"
+
+At this exact moment, Task 1 is completely "Switched Out." Its entire brain state—every variable, every math problem, the exact line of C code it was reading—is safely frozen inside its personal chunk of RAM.
+
+---
+
 ## Memory Allocation: What Happens in RAM?
 
 When you call `xTaskCreate`, the RTOS kernel carves out two blocks of memory from the **Heap**:
