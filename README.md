@@ -372,6 +372,32 @@ At this exact moment, Task 1 is completely "Switched Out." Its entire brain stat
 
 ---
 
+### The Lifecycle of a Context Switch (Step-by-Step)
+
+To visualize this process, think of the CPU as a **Worker**, the Registers as a **Whiteboard**, and each Task having its own **Filing Cabinet (Stack)** and **Employee File (TCB)**.
+
+#### Phase 1: Switching OUT Task A (The Freeze)
+
+1.  **The Alarm Rings:** The CPU instantly stops what it is doing.
+2.  **Save the Whiteboard:** The CPU takes everything written on the whiteboard (all of Task A's Registers) and shoves them into Task A's Filing Cabinet (Task A's Stack).
+3.  **Update the Employee File:** The Manager looks at the **PSP** (the "laser pointer") to see exactly where it just shoved all that data, and writes that memory location down in Task A's **TCB**.
+
+**Result:** Task A is now completely frozen in time. The whiteboard is empty.
+
+#### Phase 2: The Pivot
+
+1.  **Pick the Next Worker:** The Manager (the Scheduler) decides Task B is next. It pulls out Task B's Employee File (**TCB**).
+2.  **Move the Laser Pointer:** The Manager reads the sticky note in Task B's file that says where Task B's filing cabinet is. It updates the **PSP** (the "laser pointer") to point directly at Task B's drawer.
+
+#### Phase 3: Switching IN Task B (The Thaw)
+
+1.  **Restore the Whiteboard:** The CPU opens Task B's filing cabinet (Task B's Stack) and copies all the saved numbers back onto the whiteboard (the CPU Registers).
+2.  **Resume Work:** Because one of those restored registers was the **Program Counter** (the register that tracks the next line of code), the CPU instantly resumes reading Task B's code exactly where it left off milliseconds or hours ago.
+
+**Result:** Task B is now running. It has no idea Task A was ever there.
+
+---
+
 ## Memory Allocation: What Happens in RAM?
 
 When you call `xTaskCreate`, the RTOS kernel carves out two blocks of memory from the **Heap**:
