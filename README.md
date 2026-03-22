@@ -178,6 +178,29 @@ Once the NVIC decides your button press is the highest priority, it literally **
 
 ---
 
+## Thread Mode vs. Handler Mode: The CPU's Split Brain
+
+At the absolute bedrock of the ARM Cortex-M silicon, the processor operates in two distinct modes to separate "normal life" from "emergencies." This is a key hardware feature that ensures a stable and secure RTOS.
+
+### 1. Thread Mode (The "Day Job")
+This is the processor's normal operating state. When you power on your STM32, the CPU wakes up in **Thread Mode**.
+- **Who lives here?** Your `main()` function, your `while(1)` loops, and every single FreeRTOS task (like `led_task`).
+- **The Vibe:** Standard, predictable work. It executes your code line-by-line.
+
+### 2. Handler Mode (The "Emergency Responder")
+This is a restricted, high-priority state. The CPU is **forbidden** from entering Handler Mode normally; it can only enter if a hardware exception or interrupt (like a button press) forces it to.
+- **Who lives here?** Interrupt Service Routines (ISRs), like `EXTI15_10_IRQHandler` or the `SysTick_Handler`.
+- **The Vibe:** Alarms are blaring. The CPU drops whatever it was holding, handles the emergency as fast as possible, and gets out.
+
+### Why Separate Them? (Stack Protection)
+The main reason ARM architects designed this is for **Memory Protection**. By physically separating these modes, the processor can use two different sets of RAM:
+1.  **PSP (Process Stack Pointer):** Used in Thread Mode. Each FreeRTOS task gets its own private "desk" (stack).
+2.  **MSP (Main Stack Pointer):** Used in Handler Mode. When the fire alarm rings, the CPU switches to a dedicated "Emergency Desk" (the Main Stack) to do its interrupt math. 
+
+This ensures that emergency responders never trample over a worker's private memory, keeping the entire system safe.
+
+---
+
 ## GPOS vs. RTOS: Key Differences
 
 
