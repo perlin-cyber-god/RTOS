@@ -283,6 +283,21 @@ ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 xTaskNotifyWait(0x00, 0xFFFFFFFF, NULL, portMAX_DELAY);
 ```
 
+#### The Golden Rule: Why the "FromISR" versions exist
+Regular functions like `xTaskNotify()` or `vTaskDelay()` are designed strictly for **Thread Mode** (Tasks). When a Task calls them, the FreeRTOS Manager might need to pause that Task or shuffle memory around.
+
+**But if the Fire Department (Handler Mode / ISR) is currently running, you can never pause it!**
+- If an ISR calls a normal `xTaskNotify`, the ARM silicon will instantly panic, throw a **Hard Fault**, and brick your board.
+- **The Solution:** FreeRTOS provides special `FromISR` versions (like `xTaskNotifyFromISR()`). These are stripped-down, lightning-fast versions designed specifically for Handler Mode. They drop the message and immediately step out of the way without trying to reorganize the OS.
+
+#### The 4 Superpowers of the 32-bit Pager
+Task Notification is more than just a dumb buzzer; it's a full 32-bit register (a piece of RAM) attached to each worker! Here is how professional engineers use those 32 bits:
+
+1.  **Write a 32-bit number:** An interrupt can write data (like an ADC reading) directly into the worker's pager! The worker wakes up and instantly has the data without needing a separate variable.
+2.  **Add one (Increment):** This acts like a **Counting Semaphore**. If a motor spins and hits a sensor 5 times before the worker wakes up, the pager will say "5", so the worker knows exactly how many events were missed.
+3.  **Set bits:** This acts like an **Event Group**. You can use the 32 bits like 32 separate light switches. Bit 0 means "Button A", Bit 1 means "Sensor B Ready", etc. One worker can wait for 32 different events using just one pager!
+4.  **Leave unchanged:** Just a simple "Wake up!" buzzer, like we used for our LED button.
+
 ### Comparison at a Glance
 
 | Feature | Global Flag Polling | Task Notification |
