@@ -252,7 +252,7 @@ int main(void) {
 /* ====================================================================
  * ZONE 5: THE TASK FUNCTIONS 
  * ==================================================================== */
-// THE POLLER: The worker checks the mailbox
+// THE POLLER: The worker checks the mailbox (The Old/Hybrid Way)
 void led_task(void *params) {
     while(1) {
         // Is the flag awake?
@@ -272,6 +272,29 @@ void led_task(void *params) {
         vTaskDelay(pdMS_TO_TICKS(50)); 
     }
 }
+
+/* 
+ * THE PROFESSIONAL WAY: Task Notifications (The New Way)
+ * ------------------------------------------------------
+ * Instead of polling a global flag, the task sleeps FOREVER 
+ * (Blocked state) and consumes 0% CPU until the ISR wakes it up.
+ *
+ * void led_task(void *params) {
+ *     while(1) {
+ *         // 1. Sleep FOREVER until the ISR buzzes my pager!
+ *         ulTaskNotifyTake(pdTRUE, portMAX_DELAY); 
+ *         
+ *         // 2. I'm awake! The button was pressed! Toggle the LED!
+ *         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+ *         vTaskDelay(pdMS_TO_TICKS(500));
+ *         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+ *         
+ *         // No delays needed at the end. It immediately loops back and blocks.
+ *     }
+ * }
+ *
+ * (Note: This requires calling vTaskNotifyGiveFromISR in the EXTI Callback)
+ */
 
 /* ====================================================================
  * ZONE 6 & 7: HELPER & HARDWARE INIT (Collapsed for brevity)
