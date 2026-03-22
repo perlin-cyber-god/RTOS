@@ -201,6 +201,29 @@ This ensures that emergency responders never trample over a worker's private mem
 
 ---
 
+## What is an ISR? (Clearing the Confusion)
+
+If you've been confused between an **ISR** and a **Hardware Interrupt Handler**, don't worry—they are actually two names for the same thing!
+
+### The Definition
+**ISR** stands for **Interrupt Service Routine**. 
+- It is a specific function in your C code that is dedicated to "servicing" a hardware request. 
+- When the NVIC rings the alarm bell for a specific event (like a button press), the CPU jumps to the ISR to handle it.
+
+### ISR vs. Hardware Interrupt Handler
+Think of it like this:
+- **"Hardware Interrupt"** is the **Event** (The doorbell ringing).
+- **"ISR"** is the **Action** (You getting up to open the door).
+
+In the STM32 world, the function `EXTI15_10_IRQHandler()` is the **ISR** for the blue button. Engineers often use the terms interchangeably, but "ISR" is the formal name for the function itself.
+
+### The Golden Rule of ISRs: "Keep it Short!"
+Because the CPU is in **Handler Mode** (the Emergency state) while running an ISR, the entire operating system is frozen. 
+- **BAD ISR:** Doing a long `printf()` or a heavy math calculation. This will crash your real-time timing.
+- **GOOD ISR:** Flipping a single flag (like `button_pressed = 1`) and getting out immediately. This lets a normal "Thread Mode" task handle the heavy work later.
+
+---
+
 ## GPOS vs. RTOS: Key Differences
 
 
