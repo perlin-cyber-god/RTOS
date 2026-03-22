@@ -293,6 +293,20 @@ Regular functions like `xTaskNotify()` or `vTaskDelay()` are designed strictly f
 #### The 4 Superpowers of the 32-bit Pager
 Task Notification is more than just a dumb buzzer; it's a full 32-bit register (a piece of RAM) attached to each worker! Here is how professional engineers use those 32 bits:
 
+```c
+// The Prototype
+BaseType_t xTaskNotify( TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction );
+```
+
+**Parameters:**
+- **`xTaskToNotify`:** The handle of the RTOS task being notified (the "Subject").
+- **`ulValue`:** Used to update the notification value of the subject task (based on the action).
+- **`eAction`:** An enumerated type that decides how the value is used:
+    - `eNoAction`: Just wake the task (the "Buzzer").
+    - `eIncrement`: Add one to the value (the "Counting Semaphore").
+    - `eSetValueWithOverwrite`: Force the value to a specific number (the "Mailbox").
+    - `eSetBits`: Update specific bits (the "Event Group").
+
 1.  **Write a 32-bit number:** An interrupt can write data (like an ADC reading) directly into the worker's pager! The worker wakes up and instantly has the data without needing a separate variable.
 2.  **Add one (Increment):** This acts like a **Counting Semaphore**. If a motor spins and hits a sensor 5 times before the worker wakes up, the pager will say "5", so the worker knows exactly how many events were missed.
 3.  **Set bits:** This acts like an **Event Group**. You can use the 32 bits like 32 separate light switches. Bit 0 means "Button A", Bit 1 means "Sensor B Ready", etc. One worker can wait for 32 different events using just one pager!
@@ -595,7 +609,16 @@ vTaskDelay(pdMS_TO_TICKS(1000));
 ```
 When Task 1 hits that line, it tells the Manager: *"I am going to sleep. Wake me up in 1000 milliseconds."*
 
-The Manager doesn't set a separate stopwatch for Task 1. Instead, it looks at the **Wall Clock (`xTickCount`)**. If the clock currently says **500**, the Manager writes a note: *"Wake up Task 1 when the wall clock reaches 1500."* 
+#### MS to Ticks: The Conversion
+How does FreeRTOS know how many "clicks" equal 1000ms? It uses this formula:
+`xTicksToWait = ( xTimeInMs * configTICK_RATE_HZ ) / 1000`
+
+**Example:**
+If `configTICK_RATE_HZ` is **500**, then the SysTick interrupt happens every **2ms**.
+- To sleep for **500ms**, the duration is `(500 * 500) / 1000 = 250 ticks`.
+
+The Manager doesn't set a separate stopwatch for Task 1. Instead, it looks at the **Wall Clock (`xTickCount`)**.
+ If the clock currently says **500**, the Manager writes a note: *"Wake up Task 1 when the wall clock reaches 1500."* 
 
 Then, the Manager puts Task 1 to sleep, hands the CPU to the Idle Task, and goes back to waiting for the next metronome click. Every millisecond, the SysTick interrupt fires, `xTickCount` goes up by 1, and the Manager checks its notepad to see if any sleeping tasks have hit their wake-up number yet.
 
