@@ -224,6 +224,57 @@ Because the CPU is in **Handler Mode** (the Emergency state) while running an IS
 
 ---
 
+## Polling vs. Task Notifications: The Evolution of Efficiency
+
+In your RTOS journey, you will notice two main ways to make a Task react to an Interrupt. One is the "Old Way" (Hybrid Polling), and the other is the "New Way" (Direct Task Notifications).
+
+### 1. The Old Way: Global Flag Polling
+This is what we call the "Hybrid" approach. The ISR sets a flag, and the task repeatedly checks it.
+
+```c
+void led_task(void *params) {
+    while(1) {
+        if (button_status_flag == 1) {   // 1. Check the whiteboard
+            HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); 
+            button_status_flag = 0;      // 2. Erase the whiteboard
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));   // 3. Wasted sleep loop
+    }
+}
+```
+- **The Problem:** Even if no one presses the button for 10 years, this task wakes up every 50ms, checks the flag, finds it's 0, and goes back to sleep. This is **wasted CPU energy**.
+- **The Latency:** If you press the button right after the task starts its 50ms sleep, the LED won't toggle for another 49ms.
+
+### 2. The New Way: Task Notifications (`ulTaskNotifyTake`)
+This is the professional RTOS way. The task doesn't "poll" anything; it literally stops existing until it is woken up.
+
+```c
+void led_task(void *params) {
+    while(1) {
+        // 1. Sleep FOREVER until the ISR buzzes my pager!
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); 
+        
+        // 2. I'm awake! The button was pressed! Toggle the LED!
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); 
+        
+        // No delays needed. It immediately loops back up and goes to sleep again.
+    }
+}
+```
+- **The Magic:** While waiting, this task is in the **Blocked** state. It consumes **0.00% CPU**.
+- **Instant Response:** The moment the ISR calls `vTaskNotifyGiveFromISR`, the scheduler instantly wakes this task. The latency is measured in microseconds, not milliseconds.
+
+### Comparison at a Glance
+
+| Feature | Global Flag Polling | Task Notification |
+| :--- | :--- | :--- |
+| **CPU Usage** | Low (but constant) | **Zero** (while waiting) |
+| **Responsiveness** | Delayed (up to 50ms) | **Instant** (Microseconds) |
+| **Logic** | "Are we there yet?" | "Wake me up when we arrive." |
+| **Complexity** | Simple C logic | Needs RTOS Handles |
+
+---
+
 ## GPOS vs. RTOS: Key Differences
 
 
