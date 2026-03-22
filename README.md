@@ -264,6 +264,25 @@ void led_task(void *params) {
 - **The Magic:** While waiting, this task is in the **Blocked** state. It consumes **0.00% CPU**.
 - **Instant Response:** The moment the ISR calls `vTaskNotifyGiveFromISR`, the scheduler instantly wakes this task. The latency is measured in microseconds, not milliseconds.
 
+#### Under the Hood: The 4 Questions of `xTaskNotifyWait`
+When a task calls the full `xTaskNotifyWait` function, it is essentially filling out a "Sleep Request Form" for the RTOS Manager:
+
+1.  **`ulBitsToClearOnEntry` (The Pre-Cleanup):** "Manager, before I go to sleep, should I delete any old messages left on my pager?" (0x00 means "No, keep them.")
+2.  **`ulBitsToClearOnExit` (The Post-Cleanup):** "Manager, after I wake up and read the message, should I delete it so I don't accidentally read it twice?" (0xFFFFFFFF means "Yes, wipe it clean.")
+3.  **`pulNotificationValue` (The Notepad):** "Manager, if the sender sent a specific number (like an error code), where in my RAM should I write it down?" (Pass `NULL` if you only care that the button was pressed, not the specific value).
+4.  **`xTicksToWait` (The Timeout):** "Manager, how long should I wait for this pager to buzz before I give up?" (`portMAX_DELAY` means "Wait forever.")
+
+#### The "Cheat Code" (ulTaskNotifyTake)
+Because filling out those 4 arguments every time is tedious for simple things like a button press, FreeRTOS gives us a shortcut function called `ulTaskNotifyTake()`. It does the exact same thing under the hood as `xTaskNotifyWait`, but it assumes you just want a simple binary "buzzer" rather than passing complex 32-bit numbers back and forth.
+
+```c
+// This 1 line of code:
+ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+// Does the exact same thing as this:
+xTaskNotifyWait(0x00, 0xFFFFFFFF, NULL, portMAX_DELAY);
+```
+
 ### Comparison at a Glance
 
 | Feature | Global Flag Polling | Task Notification |
