@@ -139,11 +139,47 @@ The reason this was slightly confusing at first is that the exercise in your sli
 Here is how your two concepts team up in the code:
 
 1.  **The Hardware Interrupt:** When you click the button, the electrical signal instantly pauses the system and flips `button_status_flag = 1`. (We never miss a click!).
-2.  **The Polling Task:** The `led_task` worker wakes up every 50ms and polls the flag (not the physical button). If it sees the flag is awake (1), it does the long, slow LED blinking routine, resets the flag to 0, and goes back to polling.
+The Polling Task: The `led_task` worker wakes up every 50ms and polls the flag (not the physical button). If it sees the flag is awake (1), it does the long, slow LED blinking routine, resets the flag to 0, and goes back to polling.
+
+---
+
+## EXTI: The Hardware Funnel (How Interrupts Actually Work)
+
+With over 100 GPIO pins and thousands of electrical signals firing constantly, how does the STM32 keep track of everything without losing its mind? It uses a multi-stage "Funnel" system to filter and prioritize signals before they ever touch the CPU.
+
+### Checkpoint 1: The GPIO Pins (The Physical Metal)
+This is the physical copper on the edge of your board. For our blue button, this is **Pin PC13**. 
+- **The Event:** When you press the button, the voltage drops from 3.3V to 0V (a Falling Edge). 
+- **The Reality:** The CPU doesn't look at the pins directly. That would be like a CEO answering every single phone call to the company. Instead, the pin passes the signal to the **EXTI block**.
+
+### Checkpoint 2: The EXTI (External Interrupt/Event Controller)
+The STM32 has many pins (PA0-PA15, PB0-PB15, etc.), but it doesn't have a separate "alarm bell" for every single one. That would waste too much silicon space.
+
+Instead, the **EXTI acts as a Funnel / Multiplexer**. It groups all physical pins into "Lines":
+- **EXTI0:** Handles Pin PA0, PB0, PC0, etc. (You can only pick one at a time!)
+- **EXTI1:** Handles Pin PA1, PB1, PC1, etc.
+- **EXTI13:** Since our button is on **PC13**, it routes through the EXTI13 line.
+
+**The EXTI's Job:** It detects the electrical change (Rising or Falling edge) and passes the "Alarm" to the next stage.
+
+### Checkpoint 3: The NVIC (Nested Vectored Interrupt Controller)
+The NVIC is the **Ultimate Manager** of the CPU, sitting right next to the processor core. To save even more space, the NVIC bundles the higher EXTI lines together:
+- It takes EXTI lines **10, 11, 12, 13, 14, and 15** and wires them to a single alarm bell called `EXTI15_10_IRQn`.
+
+**The NVIC's Job is Priority:** If a USB data packet arrives at the exact same microsecond you press the blue button, the NVIC looks at its priority list, decides which is more important, and tells the other one to wait in line.
+
+### Checkpoint 4: The Processor Core (ARM Cortex)
+Once the NVIC decides your button press is the highest priority, it literally **taps the ARM Processor on the shoulder**.
+- **The Freeze:** The Processor instantly freezes FreeRTOS and drops whatever math it was doing.
+- **The Jump:** It "jumps" its execution point to our `EXTI15_10_IRQHandler()` function in C.
+
+**Summary of the Chain:**
+`Physical Pin (PC13)` → `EXTI Line 13` → `NVIC (EXTI15_10)` → `ARM CPU Core` → `Your C Code`
 
 ---
 
 ## GPOS vs. RTOS: Key Differences
+
 
 
 ### General Purpose Operating System (GPOS)
