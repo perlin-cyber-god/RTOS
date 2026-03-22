@@ -132,6 +132,15 @@ void led_task(void *params) {
 }
 ```
 
+### The RTOS Secret: We are doing a "Hybrid"!
+
+The reason this was slightly confusing at first is that the exercise in your slide uses both concepts together. This is a famous RTOS design pattern called **Deferred Interrupt Processing**.
+
+Here is how your two concepts team up in the code:
+
+1.  **The Hardware Interrupt:** When you click the button, the electrical signal instantly pauses the system and flips `button_status_flag = 1`. (We never miss a click!).
+2.  **The Polling Task:** The `led_task` worker wakes up every 50ms and polls the flag (not the physical button). If it sees the flag is awake (1), it does the long, slow LED blinking routine, resets the flag to 0, and goes back to polling.
+
 ---
 
 ## GPOS vs. RTOS: Key Differences
