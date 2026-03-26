@@ -1,370 +1,94 @@
-// /* ====================================================================
-//  * ZONE 1: INCLUDES
-//  * ==================================================================== */
-// #include "stm32f1xx_hal.h"
-// #include "FreeRTOS.h"
-// #include "task.h"
-// #include <stdio.h>
+#include <Arduino.h>
 
-// /* ====================================================================
-//  * ZONE 2: GLOBAL VARIABLES & PROTOTYPES
-//  * ==================================================================== */
-// UART_HandleTypeDef huart2;
+// --- Hardware Pin Definitions ---
+const int BUTTON_PIN = 2; // Connect button between Pin 2 and Ground
+const int LED_PIN = 13;   // Built-in LED pin on many boards
 
-// // Hardware Setup Prototypes
-// void SystemClock_Config(void);
-// void GPIO_Init(void);           
-// void USART2_Init(void);
+// --- Task Handle ---
+// We need this handle so the Button Task knows exactly who to notify
+TaskHandle_t TaskLEDHandle = NULL;
 
-// // Task Prototypes (The Instruction Manuals)
-// void task_A(void *params);
-// void task_B(void *params);
-// void task_C(void *params);
-
-// /* ====================================================================
-//  * ZONE 3: THE FREE-RTOS HOOKS & HANDLERS (The Traffic Cops)
-//  * ==================================================================== */
-// extern void xPortSysTickHandler(void);
-
-// // Our custom SysTick handler that prevents the 1ms startup crash
-// void SysTick_Handler(void) {
-//     HAL_IncTick(); 
-//     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
-//         xPortSysTickHandler();
-//     }
-// }
-
-// // The Janitor: Runs ONLY when all other tasks are asleep (Priority 0)
-// void vApplicationIdleHook(void) {
-//     // Pulse PA8 HIGH then LOW instantly. 
-//     // This creates a dense "comb" on the logic analyzer to prove the CPU is idling!
-//     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-//     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
-// }
-
-// // Required by FreeRTOSConfig.h, but we leave it empty
-// void vApplicationTickHook(void) {
-// }
-
-// /* ====================================================================
-//  * ZONE 4: THE MAIN FUNCTION (The Manager's Office)
-//  * ==================================================================== */
-// int main(void) {
-//     /* --- 1. Boot up the hardware --- */
-//     HAL_Init();
-//     SystemClock_Config();
-//     GPIO_Init();                
-//     USART2_Init();
+// --- Task 1: The Button Task ---
+void taskButton(void *pvParameters) {
+    bool lastButtonState = HIGH; // Assuming INPUT_PULLUP (HIGH = unpressed)
     
-//     printf("\r\n--- Logic Analyzer Profiling Test Starting ---\r\n");
-
-//     /* --- 2. Hire the Workers --- */
-//     // All workers get the exact same Priority (2)
-//     xTaskCreate(task_A, "TaskA", 128, NULL, 2, NULL);
-//     xTaskCreate(task_B, "TaskB", 128, NULL, 2, NULL);
-//     xTaskCreate(task_C, "TaskC", 128, NULL, 2, NULL);
-
-//     /* --- 3. Lock the doors and start the OS --- */
-//     vTaskStartScheduler();
-
-//     /* --- 4. The Black Hole --- */
-//     while(1);
-    
-//     return 0;
-// }
-
-// /* ====================================================================
-//  * ZONE 5: THE TASK FUNCTIONS (The Workers)
-//  * ==================================================================== */
-
-// void task_A(void *params) {
-//     while(1) {
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // D0 High
-//         printf("Task A is working...\r\n");
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // D0 Low
+    for (;;) {
+        bool currentButtonState = digitalRead(BUTTON_PIN);
         
-//         vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
-//     }
-// }
-
-// void task_B(void *params) {
-//     while(1) {
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);   // D1 High
-//         printf("Task B is working...\r\n");
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET); // D1 Low
-        
-//         vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
-//     }
-// }
-
-// void task_C(void *params) {
-//     while(1) {
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);   // D2 High
-//         printf("Task C is working...\r\n");
-//         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET); // D2 Low
-        
-//         vTaskDelay(pdMS_TO_TICKS(2000));                      // Sleep 2000ms
-//     }
-// }
-
-// /* ====================================================================
-//  * ZONE 6: HELPER FUNCTIONS
-//  * ==================================================================== */
-// // This links 'printf' directly to our UART cable
-// int _write(int file, char *ptr, int len) {
-//     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-//     return len;
-// }
-
-// /* ====================================================================
-//  * ZONE 7: HARDWARE INITIALIZATION (The Boring Silicon Stuff)
-//  * ==================================================================== */
-
-// void GPIO_Init(void) {
-//     __HAL_RCC_GPIOA_CLK_ENABLE();
-//     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    
-//     // Configure PA5 (D0), PA6 (D1), PA7 (D2), and PA8 (D3)
-//     GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8; 
-//     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; 
-//     GPIO_InitStruct.Pull = GPIO_NOPULL;
-//     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-//     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-// }
-
-// void USART2_Init(void) {
-//     __HAL_RCC_GPIOA_CLK_ENABLE();
-//     __HAL_RCC_USART2_CLK_ENABLE();
-
-//     GPIO_InitTypeDef GPIO_InitStruct = {0};
-//     GPIO_InitStruct.Pin = GPIO_PIN_2;
-//     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; 
-//     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-//     GPIO_InitStruct.Pin = GPIO_PIN_3;
-//     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-//     GPIO_InitStruct.Pull = GPIO_NOPULL;
-//     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-//     huart2.Instance = USART2;
-//     huart2.Init.BaudRate = 115200;
-//     huart2.Init.WordLength = UART_WORDLENGTH_8B;
-//     huart2.Init.StopBits = UART_STOPBITS_1;
-//     huart2.Init.Parity = UART_PARITY_NONE;
-//     huart2.Init.Mode = UART_MODE_TX_RX;
-//     huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-//     huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-//     HAL_UART_Init(&huart2);
-// }
-
-// void SystemClock_Config(void) {
-//     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-//     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-//     // Using the internal HSI clock (The fix we applied earlier!)
-//     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-//     RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-//     RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-//     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-//     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-//     RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16; 
-//     HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
-//     RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-//                                 |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-//     RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-//     RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-//     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-//     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-//     HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2);
-// }
-
-/* ====================================================================
- * ZONE 1: INCLUDES
- * ==================================================================== */
-#include "stm32f1xx_hal.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include <stdio.h>
-
-/* ====================================================================
- * ZONE 2: GLOBAL VARIABLES & PROTOTYPES
- * ==================================================================== */
-UART_HandleTypeDef huart2;
-
-// The Shared Mailbox Flag! (volatile because hardware changes it)
-volatile uint8_t button_status_flag = 0; 
-
-void SystemClock_Config(void);
-void GPIO_Init(void);           
-void USART2_Init(void);
-void led_task(void *params);
-
-/* ====================================================================
- * ZONE 3: THE HARDWARE INTERRUPTS & RTOS HOOKS
- * ==================================================================== */
-extern void xPortSysTickHandler(void);
-
-void SysTick_Handler(void) {
-    HAL_IncTick(); 
-    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
-        xPortSysTickHandler();
-    }
-}
-
-void EXTI15_10_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13); 
-}
-
-// THE INTERRUPT: The electrical signal triggers this!
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    if(GPIO_Pin == GPIO_PIN_13) {
-        // Drop the package in the mailbox! (Takes 1 microsecond)
-        button_status_flag = 1; 
-    }
-}
-
-void vApplicationTickHook(void) {}
-void vApplicationIdleHook(void) {}
-
-/* ====================================================================
- * ZONE 4: THE MAIN FUNCTION
- * ==================================================================== */
-int main(void) {
-    HAL_Init();
-    SystemClock_Config();
-    GPIO_Init();                
-    USART2_Init();
-    
-    printf("\r\n--- RTOS Interrupt vs Polling Test ---\r\n");
-
-    // Hire the worker
-    xTaskCreate(led_task, "LED_Task", 128, NULL, 2, NULL);
-
-    // Start the OS
-    vTaskStartScheduler();
-
-    while(1);
-    return 0;
-}
-
-/* ====================================================================
- * ZONE 5: THE TASK FUNCTIONS 
- * ==================================================================== */
-// THE POLLER: The worker checks the mailbox (The Old/Hybrid Way)
-void led_task(void *params) {
-    while(1) {
-        // Is the flag awake?
-        if (button_status_flag == 1) {
+        // Check for a falling edge (button was just pressed down)
+        if (lastButtonState == HIGH && currentButtonState == LOW) {
             
-            // Do the heavy routine
-            printf("Button clicked! Blinking LED...\r\n");
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-            vTaskDelay(pdMS_TO_TICKS(500)); // Glow for finite time
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+            // 1. Notify the LED task that a press happened
+            xTaskNotifyGive(TaskLEDHandle);
             
-            // Consume the flag
-            button_status_flag = 0; 
+            // 2. Simple debounce delay to prevent multi-counting a single physical press
+            vTaskDelay(pdMS_TO_TICKS(50)); 
         }
         
-        // Take a small rest, then check the flag again
-        vTaskDelay(pdMS_TO_TICKS(50)); 
+        lastButtonState = currentButtonState;
+        
+        // Yield the CPU briefly so the watchdog timer doesn't crash the system
+        vTaskDelay(pdMS_TO_TICKS(10)); 
     }
 }
 
-/* 
- * THE PROFESSIONAL WAY: Task Notifications (The New Way)
- * ------------------------------------------------------
- * Instead of polling a global flag, the task sleeps FOREVER 
- * (Blocked state) and consumes 0% CPU until the ISR wakes it up.
- *
- * void led_task(void *params) {
- *     while(1) {
- *         // 1. Sleep FOREVER until the ISR buzzes my pager!
- *         ulTaskNotifyTake(pdTRUE, portMAX_DELAY); 
- *         
- *         // 2. I'm awake! The button was pressed! Toggle the LED!
- *         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
- *         vTaskDelay(pdMS_TO_TICKS(500));
- *         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
- *         
- *         // No delays needed at the end. It immediately loops back and blocks.
- *     }
- * }
- *
- * (Note: This requires calling vTaskNotifyGiveFromISR in the EXTI Callback)
- */
-
-/* ====================================================================
- * ZONE 6 & 7: HELPER & HARDWARE INIT (Collapsed for brevity)
- * ==================================================================== */
-int _write(int file, char *ptr, int len) {
-    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
-}
-
-void GPIO_Init(void) {
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE(); 
+// --- Task 2: The LED Task ---
+void taskLED(void *pvParameters) {
+    uint32_t pressCount = 0;
+    bool ledState = LOW;
     
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    for (;;) {
+        // This is the magic line. It places the task in the BLOCKED state 
+        // indefinitely (portMAX_DELAY) until a notification arrives. 
+        // It consumes zero CPU cycles while waiting.
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        // --- If the code reaches here, a notification was received! ---
+        
+        // 1. Increment the press counter
+        pressCount++;
+        
+        // 2. Toggle the LED
+        ledState = !ledState;
+        digitalWrite(LED_PIN, ledState);
+        
+        // 3. Print the results
+        Serial.print("Button pressed! Total times so far: ");
+        Serial.println(pressCount);
+    }
+}
+
+// --- Main Setup ---
+void setup() {
+    Serial.begin(115200);
     
-    // PA5 (LED)
-    GPIO_InitStruct.Pin = GPIO_PIN_5; 
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; 
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(LED_PIN, OUTPUT);
 
-    // PC13 (Button) as EXTERNAL INTERRUPT
-    GPIO_InitStruct.Pin = GPIO_PIN_13;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING; 
-    GPIO_InitStruct.Pull = GPIO_NOPULL; 
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    // Create the LED Task
+    // Priority is set to 1. The handle is saved to TaskLEDHandle.
+    xTaskCreate(
+        taskLED,          // Function that implements the task
+        "TaskLED",        // Text name for the task
+        2048,             // Stack size (in words)
+        NULL,             // Task input parameter
+        1,                // Priority (1 is equal to Button Task)
+        &TaskLEDHandle    // Task handle
+    );
 
-    // Turn on the NVIC Alarm System
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 6, 0);
-    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+    // Create the Button Task
+    // Priority is also set to 1. No handle needed since nobody notifies this task.
+    xTaskCreate(
+        taskButton,       // Function that implements the task
+        "TaskButton",     // Text name for the task
+        2048,             // Stack size (in words)
+        NULL,             // Task input parameter
+        1,                // Priority (1 is equal to LED Task)
+        NULL              // Task handle
+    );
 }
 
-void USART2_Init(void) {
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_USART2_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = GPIO_PIN_2;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; 
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    GPIO_InitStruct.Pin = GPIO_PIN_3;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    huart2.Instance = USART2;
-    huart2.Init.BaudRate = 115200;
-    huart2.Init.WordLength = UART_WORDLENGTH_8B;
-    huart2.Init.StopBits = UART_STOPBITS_1;
-    huart2.Init.Parity = UART_PARITY_NONE;
-    huart2.Init.Mode = UART_MODE_TX_RX;
-    huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-    HAL_UART_Init(&huart2);
-}
-
-void SystemClock_Config(void) {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16; 
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2);
+void loop() {
+    // In a pure FreeRTOS environment, the loop is empty.
+    // The RTOS scheduler takes over entirely.
 }
