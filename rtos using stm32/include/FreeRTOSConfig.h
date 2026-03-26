@@ -42,12 +42,10 @@
 #define INCLUDE_xTaskGetSchedulerState          1
 
 // STM32 specific: Map FreeRTOS handlers to STM32 vector table
-#define vPortSVCHandler     SVC_Handler
-#define xPortPendSVHandler  PendSV_Handler
-//#define xPortSysTickHandler SysTick_Handler
-/* Map FreeRTOS interrupt handlers to CMSIS standard hardware names */
+/* --- Map the FreeRTOS port interrupt handlers to the STM32 CMSIS names --- */
 #define vPortSVCHandler    SVC_Handler
 #define xPortPendSVHandler PendSV_Handler
+#define xPortSysTickHandler SysTick_Handler
 //#define xPortSysTickHandler SysTick_Handler
 
 #endif /* FREERTOS_CONFIG_H */
